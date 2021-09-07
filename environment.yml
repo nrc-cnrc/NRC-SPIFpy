@@ -1,0 +1,9 @@
+name: spifpy
+channels:
+  - conda-forge
+  - anaconda
+dependencies:
+  - python=3.6
+  - numpy
+  - tqdm
+  - netCDF4>=1.5.7

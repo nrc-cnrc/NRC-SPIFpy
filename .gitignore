@@ -1,0 +1,16 @@
+*.nc
+*.2DS
+*.sea
+Imagefile*
+*.pdf
+*.aux
+*.out
+*.toc
+*.log
+*.gz
+*.DS_Store
+*__pycache__
+base*
+*sublime*
+spifpy.egg-info/**
+venv/**
