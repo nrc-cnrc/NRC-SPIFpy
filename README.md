@@ -37,7 +37,7 @@ $ pip install .
 ```
 
 <a name="usage"></a>
-## Usage
+## Example Usage With SPEC-2DS Probe
 
 1. Copy over required configuration files using `spifcc`, and make any desired modifications to the config files. In this
 case, the config files will include `2DS.ini` which defines config options for extracting and storing 2DS data, and
