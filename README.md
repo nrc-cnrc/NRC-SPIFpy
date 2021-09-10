@@ -67,6 +67,7 @@ Currently the following probe types are supported:
 
 - 2DS
 - 2DC
+- 2DP
 - HVPS
 - PIP
 - CIP
