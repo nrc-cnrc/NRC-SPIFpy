@@ -7,3 +7,4 @@ dependencies:
   - numpy
   - tqdm
   - netCDF4>=1.5.7
+  - numba
