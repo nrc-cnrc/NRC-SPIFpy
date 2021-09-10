@@ -15,16 +15,26 @@ and includes the following utilities:
 ## Installation Requirements
 
 - Python 3.6+
+- Linux/MacOS : Any python environment manager
+- Windows : [Anaconda Python Distribution(64-bit)](https://www.anaconda.com/products/individual)
 
 ## Installation
 
+### Linux/MacOS
 ```
 $ git clone https://github.com/mfreer/SPIFpy.git
 $ cd /path/to/spifpy
 $ pip install .
 ```
 
-Please note that for non Linux/MacOS distributions, the host computer will need to be installed using the Anaconda Python distribution using the same command.
+### Windows
+
+```
+$ cd /path/to/spifpy
+$ conda env create -f environment.yml
+$ conda activate spifpy
+$ pip install .
+```
 
 <a name="usage"></a>
 ## Usage
