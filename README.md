@@ -63,11 +63,12 @@ $ spifaddaux example_file_2DS.nc auxiliary_file.nc -i 2DS-V -c aux_config.ini
 <a name="supported-probes"></a>
 ### Supported probes
 
-Currently the following probe types are supported:
+Currently the following monoscale imaging probe types are supported:
 
+- 2DC (Two Dimension Cloud particle imaging probe)
+- 2DP (Two Dimension Precipitation particle imaging probe)
 - 2DS (2D-Stereo, SPEC Inc.)
-- 2DC
-- 2DP
-- HVPS (High Volume Precipitation Spectrometer, SPEC Inc.)
-- PIP (Precipitation Imaging Probe, DMT)
 - CIP (Cloud Imaging Probe, DMT)
+- PIP (Precipitation Imaging Probe, DMT)
+- HVPS (High Volume Precipitation Spectrometer, SPEC Inc.)
+
