@@ -1,6 +1,7 @@
-# SPIFpy
+# NRC SPIFpy
 
-Single Particle Image Format (SPIF) conversion utility.
+NRC's Single Particle Image Format (SPIF) conversion utility. 
+Ver. 1.0? (Release date October 2021)?
 
 ## About
 
@@ -74,7 +75,7 @@ Currently the following Optical Array Probes (OAP) are supported:
 
 <a name="citation"></a>
 ### Citations  
-Bala, K., Freer, M., Bliankinshtein, N., Nichman, L., Shilin, S. and Wolde, M.: Standardized Imaging Probe Format and Algorithms: Implementation and Applications, 18th International Conference on Clouds and Precipitation (ICCP), Pune, India, 2-6 August, 2020.
+<i>Bala, K., Freer, M., Bliankinshtein, N., Nichman, L., Shilin, S. and Wolde, M.: Standardized Imaging Probe Format and Algorithms: Implementation and Applications, 18th International Conference on Clouds and Precipitation (ICCP), Pune, India, 2-6 August, 2020.</i>
 
 <a name="acknowledgment"></a>
 ### Acknowledgments
