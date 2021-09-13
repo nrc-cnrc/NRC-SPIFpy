@@ -79,3 +79,4 @@ Currently the following Optical Array Probes (OAP) are supported:
 
 <a name="acknowledgment"></a>
 ### Acknowledgments
+We acknowledge CloudSci LLC for the support in developing this tool
