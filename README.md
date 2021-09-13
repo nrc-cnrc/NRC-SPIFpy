@@ -72,3 +72,9 @@ Currently the following Optical Array Probes (OAP) are supported:
 - PIP (Precipitation Imaging Probe, DMT)
 - HVPS (High Volume Precipitation Spectrometer, SPEC Inc.)
 
+<a name="citation"></a>
+### Citations  
+Bala, K., Freer, M., Bliankinshtein, N., Nichman, L., Shilin, S. and Wolde, M.: Standardized Imaging Probe Format and Algorithms: Implementation and Applications, 18th International Conference on Clouds and Precipitation (ICCP), Pune, India, 2-6 August, 2020.
+
+<a name="acknowledgment"></a>
+### Acknowledgments
