@@ -65,9 +65,9 @@ $ spifaddaux example_file_2DS.nc auxiliary_file.nc -i 2DS-V -c aux_config.ini
 
 Currently the following probe types are supported:
 
-- 2DS
+- 2DS (2D-Stereo, SPEC Inc.)
 - 2DC
 - 2DP
-- HVPS
-- PIP
-- CIP
+- HVPS (High Volume Precipitation Spectrometer, SPEC Inc.)
+- PIP (Precipitation Imaging Probe, DMT)
+- CIP (Cloud Imaging Probe, DMT)
