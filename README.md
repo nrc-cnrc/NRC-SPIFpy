@@ -63,7 +63,7 @@ $ spifaddaux example_file_2DS.nc auxiliary_file.nc -i 2DS-V -c aux_config.ini
 <a name="supported-probes"></a>
 ### Supported probes
 
-Currently the following monoscale imaging probe types are supported:
+Currently the following Optical Array Probes (OAP) are supported:
 
 - 2DC (Two Dimension Cloud particle imaging probe)
 - 2DP (Two Dimension Precipitation particle imaging probe)
