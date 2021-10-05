@@ -26,7 +26,7 @@ import warnings
 
 from tqdm import tqdm
 
-from . import tag
+from nrc_spifpy.input import tag
 
 M200_ACQUISITION_TABLE = 'ACQTBL.TXT'
 M200_SECONDARY_ACQUISITION_TABLE = 'ACQ2TBL.TXT'

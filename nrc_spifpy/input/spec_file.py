@@ -13,8 +13,8 @@ import time
 import numpy
 from tqdm import tqdm
 
-from . import BinaryFile
-from ..images import Images
+from nrc_spifpy.input.binary_file import BinaryFile
+from nrc_spifpy.images import Images
 
 MAX_PROCESSORS = 20
 

@@ -21,7 +21,7 @@ def get_long_description():
 def get_version():
     """Read package version from the __version__.py file."""
     context = {}
-    with open(os.path.join(PROJECT_ROOT, "spifpy", "__version__.py")) as f:
+    with open(os.path.join(PROJECT_ROOT, "nrc_spifpy", "__version__.py")) as f:
         exec(f.read(), context)
     return context["__version__"]
 
@@ -59,9 +59,9 @@ setup(
     },
     entry_points='''
         [console_scripts]
-        nrc-spifpy-extract=spifpy.scripts.extract:extract
-        nrc-spifpy-addaux=spifpy.scripts.addaux:addaux
-        nrc-spifpy-cc=spifpy.scripts.copyconf:copyconf
+        nrc-spifpy-extract=nrc_spifpy.scripts.extract:extract
+        nrc-spifpy-addaux=nrc_spifpy.scripts.addaux:addaux
+        nrc-spifpy-cc=nrc_spifpy.scripts.copyconf:copyconf
     ''',
     python_requires=">=3.6.0",
 )

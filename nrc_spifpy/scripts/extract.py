@@ -10,11 +10,11 @@ import pathlib as pl
 
 import datetime as dt
 
-from spifpy.input import DMTMonoFile
-from spifpy.input import DMTGreyFile
-from spifpy.input import SPECFile
-from spifpy.input import TwoDFile
-from spifpy.spif import SPIFCore
+from nrc_spifpy.input import DMTMonoFile
+from nrc_spifpy.input import DMTGreyFile
+from nrc_spifpy.input import SPECFile
+from nrc_spifpy.input import TwoDFile
+from nrc_spifpy.spif import SPIFCore
 
 inst_dict = {'2DC': TwoDFile,
              '2DP': TwoDFile,

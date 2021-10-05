@@ -10,9 +10,9 @@ import time
 
 from tqdm import tqdm
 
-from . import BinaryFile
-from .input_utils import read_sea_image_data
-from ..images import Images
+from nrc_spifpy.input.binary_file import BinaryFile
+from nrc_spifpy.input.input_utils import read_sea_image_data
+from nrc_spifpy.images import Images
 
 MAX_PROCESSORS = 20
 

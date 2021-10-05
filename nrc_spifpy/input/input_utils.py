@@ -3,7 +3,7 @@
 
 import numpy
 
-from . import sea
+from nrc_spifpy.input import sea
 
 
 def read_sea_image_data(filename, file_dtype, typ, inst_name=None):
