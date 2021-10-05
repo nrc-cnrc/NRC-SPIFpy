@@ -21,12 +21,12 @@ def copyconf():
     instrument_config_name = f"{instrument}.ini"
 
     try:
-        assert pkg_resources.resource_exists('spifpy', f"config/{instrument_config_name}")
+        assert pkg_resources.resource_exists('nrc_spifpy', f"config/{instrument_config_name}")
     except AssertionError:
         print(f"ERROR : The supplied instrument name {instrument} cannot be found in the config list.")
     
-    instrument_config_data = pkg_resources.resource_string('spifpy', f"config/{instrument_config_name}")
-    aux_config_data = pkg_resources.resource_string('spifpy', f"config/aux_config.ini")
+    instrument_config_data = pkg_resources.resource_string('nrc_spifpy', f"config/{instrument_config_name}")
+    aux_config_data = pkg_resources.resource_string('nrc_spifpy', f"config/aux_config.ini")
 
     dst_root = pl.Path.cwd()
 
