@@ -10,7 +10,6 @@ import pathlib as pl
 
 import datetime as dt
 
-from spifpy.scripts.spifaddaux import spifaddaux
 from spifpy.input import DMTMonoFile
 from spifpy.input import DMTGreyFile
 from spifpy.input import SPECFile
@@ -25,7 +24,7 @@ inst_dict = {'2DC': TwoDFile,
              '2DS': SPECFile,
              'HVPS': SPECFile}
 
-def spifpy():
+def extract():
 
      # Get the parser and grab the args
 

@@ -7,7 +7,7 @@ import pathlib as pl
 
 import pkg_resources
 
-def spifcc():
+def copyconf():
     parser = argparse.ArgumentParser(description='Copies over a configuration file to current working directory')
 
     parser.add_argument('instrument',

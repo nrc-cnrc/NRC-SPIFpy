@@ -27,7 +27,7 @@ def get_version():
 
 
 setup(
-    name="spifpy",
+    name="nrc_spifpy",
     version=get_version(),
     packages=find_packages(),
     description="Single Particle Image Format (SPIF) data converter and interface",
@@ -35,7 +35,7 @@ setup(
     long_description_content_type="text/markdown",
     author="Kenny Bala",
     author_email="Kliti.Bala@nrc-cnrc.gc.ca",
-    url="https://github.com/mfreer/SPIFpy",
+    url="https://github.com/nrc-cnrc/NRC-SPIFpy",
     install_requires=get_requirements("requirements/requirements.txt"),
     license="MIT",
     keywords="SPIF, Converter",
@@ -51,18 +51,17 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
         "Topic :: Scientific/Engineering :: Atmospheric Science",
     ],
     package_data={
-        "spifpy": ["config/**.ini"],
+        "nrc_spifpy": ["config/**.ini"],
     },
     entry_points='''
         [console_scripts]
-        spifpy=spifpy.scripts.spifpy:spifpy
-        spifaddaux=spifpy.scripts.spifaddaux:spifaddaux
-        spifcc=spifpy.scripts.spifcc:spifcc
+        nrc-spifpy-extract=spifpy.scripts.extract:extract
+        nrc-spifpy-addaux=spifpy.scripts.addaux:addaux
+        nrc-spifpy-cc=spifpy.scripts.copyconf:copyconf
     ''',
     python_requires=">=3.6.0",
 )
-
-

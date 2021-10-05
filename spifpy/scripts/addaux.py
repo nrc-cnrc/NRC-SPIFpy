@@ -14,7 +14,7 @@ import netCDF4 as nc
 
 import numpy
 
-def spifaddaux():
+def addaux():
     parser = get_parser()
     args = parser.parse_args()
 
