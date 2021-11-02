@@ -13,4 +13,5 @@ Imagefile*
 base*
 *sublime*
 spifpy.egg-info/**
+nrc_spifpy.egg-info/**
 venv/**
