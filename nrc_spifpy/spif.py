@@ -95,6 +95,10 @@ class SPIFCore(object):
     def slice_dataset(self, ind_min, ind_max):
         self.instfile.data = self.instfile.data[ind_min:ind_max]
 
+        "We now need to reset the timestamps as well, since we have cut the data"
+
+        self.instfile.calc_buffer_datetimes()
+
     def get_config(self, config_file):
         """ Given config filename, open and return configparser object.
 
@@ -435,6 +439,43 @@ class SPIFFile(object):
                     self.create_variable(coregrp,
                                          key,
                                          'f',
+                                         ('Images',),
+                                         attrs=None,
+                                         data=val,
+                                         zlib=True,
+                                         chunksizes=(TIME_CHUNK,))
+                else:
+                    self.write_variable(coregrp, key, val, dim_size)
+
+        self.rootgrp.sync()
+
+    def write_images_with_extra_aux_dtypes(self, inst_name, images, aux_dtypes):
+        """ Writes image information to NetCDF file. If image information
+        already exists in NetCDF file, new image information is appended
+        to the end of existing data.
+
+        Parameters
+        ----------
+        inst_name : str
+            Instrument name to write image information to.
+        images : Images object
+            Images object containing image information to write to file.
+        """
+        instgrp = self.instgrps[inst_name]
+        coregrp = instgrp['core']
+        dim_size = len(instgrp.dimensions['Images'])
+        px_size = len(instgrp.dimensions['Pixels'])
+        self.write_variable(coregrp, 'image_sec', images.sec, dim_size)
+        self.write_variable(coregrp, 'image_ns', images.ns, dim_size)
+        self.write_variable(coregrp, 'image_len', images.length, dim_size)
+        self.write_variable(coregrp, 'buffer_index', images.buffer_index, dim_size)
+        self.write_variable(coregrp, 'image', images.image, px_size)
+        for key, val in images.__dict__.items():
+            if key not in images.default_items:
+                if key not in coregrp.variables.keys():
+                    self.create_variable(coregrp,
+                                         key,
+                                         aux_dtypes[key],
                                          ('Images',),
                                          attrs=None,
                                          data=val,

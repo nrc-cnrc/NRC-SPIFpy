@@ -18,6 +18,7 @@ from nrc_spifpy.images import Images
 
 MAX_PROCESSORS = 20
 
+from pprint import pprint
 
 class SPECFile(BinaryFile):
     """ Class representing monoscale binary format for SPEC instruments.
@@ -52,7 +53,31 @@ class SPECFile(BinaryFile):
                                        ('data', '(2048, )u2'),
                                        ('discard', 'u2')
                                        ])
-        self.aux_channels = ['tas']
+        self.aux_channels = [
+            'tas',
+            'num_words',
+            'timing_flag',
+            'mismatch_flag',
+            'fifo_flag',
+            'overload_flag',
+            'particle_count',
+            'num_slices',
+            'timing_word_upper',
+            'timing_word_lower'
+        ]
+
+        self.aux_dtypes = {
+            'tas':'f',
+            'num_words':'u2',
+            'timing_flag':'u2',
+            'mismatch_flag':'u2',
+            'fifo_flag':'u2',
+            'overload_flag':'u2',
+            'particle_count':'u2',
+            'num_slices':'u2',
+            'timing_word_upper':'u2',
+            'timing_word_lower':'u2'
+        }
 
     def calc_buffer_datetimes(self):
         """ Calculates datetimes from bufffers read in from file and sets
@@ -115,46 +140,29 @@ class SPECFile(BinaryFile):
                      total=process_until,
                      unit='frame')
 
-        t00 = time.time()
         i = 0
         chunksize = 500
-        max_write_queue = 8
         images_remaining = True
-        futures = []
-        with ProcessPoolExecutor(max_workers=processors) as executor:
-            while True:
-                while len(futures) <= max_write_queue and images_remaining:
-                    futures.append(executor.submit(self.process_frames,
-                                                   data_chunk[i: i + chunksize]))
-                    i += chunksize
-                    if i >= process_until:
-                        images_remaining = False
-                    pbar1.update(chunksize)
 
-                done, running = wait(futures, return_when=FIRST_COMPLETED)
-                for f in done:
-                    indx = futures.index(f)
-                    if indx == 0:
-                        pbar2.update(chunksize)
-                        h_images, v_images, frame = f.result()
-                        tot_h_images += len(h_images)
-                        tot_v_images += len(v_images)
-                        t0 = time.time()
-                        self.partial_write(spiffile, h_images, v_images)
-                        # print(f'Frame {frame} images '
-                        #       f'written in {time.time() - t0:0.3f} seconds')
-                        futures.pop(indx)
-                        gc.collect()
+        while images_remaining:
+            h_images, v_images, frame = self.process_frames(data_chunk[i:i + chunksize])
 
-                if not images_remaining and len(futures) == 0:
-                    break
+            i += chunksize
+            
+            if i >= process_until:
+                images_remaining = False
+            
+            pbar1.update(chunksize)
+
+            self.partial_write(spiffile, h_images, v_images)
+
+            pbar2.update(chunksize)
+
+            tot_h_images += len(h_images)
+            tot_v_images += len(v_images)
 
         pbar1.close()
         pbar2.close()
-        print('Finished processing.')
-        t0 = time.time()
-        t11 = time.time()
-        print(f'{tot_h_images}-H; {tot_v_images}-V images processed in {t11 - t00:0.3f} seconds')
 
     def partial_write(self, spiffile, h_p, v_p):
         """ Called each time number of unsaved processed images exceeds
@@ -173,14 +181,14 @@ class SPECFile(BinaryFile):
         if self.name == '2DS':
             if len(h_p) > 0:
                 h_p.conv_to_array(self.diodes)
-                spiffile.write_images(self.name + '-H', h_p)
+                spiffile.write_images_with_extra_aux_dtypes(self.name + '-H', h_p, self.aux_dtypes)
             v_suffix = '-V'
         else:
             v_suffix = ''
 
         if len(v_p) > 0:
             v_p.conv_to_array(self.diodes)
-            spiffile.write_images(self.name + v_suffix, v_p)
+            spiffile.write_images_with_extra_aux_dtypes(self.name + v_suffix, v_p, self.aux_dtypes)
 
         v_p.clear()
         h_p.clear()
@@ -245,42 +253,48 @@ class SPECFile(BinaryFile):
                 v = self.decode_flags(record[i + 2])
                 image_count = record[i + 3]
                 num_slices = record[i + 4]
+                
                 i += 5
                 if (h['mismatch'] == 1) or (v['mismatch'] == 1):
                     i += h['n'] + v['n']
                 else:
                     if h['n'] > 0:
-                        h_decomp, h_count = self.process_image(record, i, h)
-                        time_delta = h_count * tick_length
-                        image_time = record_time + datetime.timedelta(seconds=int(time_delta))
-                        h_img, h_len, h_images = self.store_image(h,
-                                                                  h_img,
-                                                                  h_decomp,
-                                                                  h_len,
-                                                                  h_images,
-                                                                  image_time,
-                                                                  frame,
-                                                                  tas
+                        h_decomp, h_timing_word_upper, h_timing_word_lower = self.process_image(record, i, h)
+                        #time_delta = h_count * tick_length
+                        #image_time = record_time + datetime.timedelta(seconds=int(time_delta))
+                        h_img, h_len, h_images = self.store_image(p = h,
+                                                                  p_img = h_img,
+                                                                  p_decomp = h_decomp,
+                                                                  p_len = h_len,
+                                                                  images = h_images,
+                                                                  record_time = record_time,
+                                                                  timing_word_upper = h_timing_word_upper,
+                                                                  timing_word_lower = h_timing_word_lower,
+                                                                  particle_count = image_count,
+                                                                  num_slices = num_slices,
+                                                                  frame = frame,
+                                                                  tas = tas
                                                                   )
 
                     if v['n'] > 0:
-                        v_decomp, v_count = self.process_image(record, i, v)
-                        time_delta = v_count * tick_length
-                        try:
-                            image_time = record_time + datetime.timedelta(seconds=int(time_delta))
-                        except OverflowError as e:
-                            print(tas, v_count, time_delta)
-                            raise e
-                        # if v_len > 400:
-                        #    print(v, v_len, v_img.shape)
-                        v_img, v_len, v_images = self.store_image(v,
-                                                                  v_img,
-                                                                  v_decomp,
-                                                                  v_len,
-                                                                  v_images,
-                                                                  image_time,
-                                                                  frame,
-                                                                  tas
+                        v_decomp, v_timing_word_upper, v_timing_word_lower = self.process_image(record, i, v)
+                        #time_delta = v_count * tick_length
+                        #try:
+                        #    image_time = record_time + datetime.timedelta(seconds=int(time_delta))
+                        #except OverflowError as e:
+                        #    raise e
+                        v_img, v_len, v_images = self.store_image(p = v,
+                                                                  p_img = v_img,
+                                                                  p_decomp = v_decomp,
+                                                                  p_len = v_len,
+                                                                  images = v_images,
+                                                                  record_time = record_time,
+                                                                  timing_word_upper = v_timing_word_upper,
+                                                                  timing_word_lower = v_timing_word_lower,
+                                                                  particle_count = image_count,
+                                                                  num_slices = num_slices,
+                                                                  frame = frame,
+                                                                  tas = tas
                                                                   )
                     i += h['n'] + v['n']
             elif record[i] == 19787:  # equals 'MK'
@@ -297,8 +311,6 @@ class SPECFile(BinaryFile):
             else:
                 tick_length = 0
 
-        # if frame % 1000 == 0:
-        #     print('At frame ' + str(frame) + ' of ' + str(len(self.data)))
         return h_images, v_images
 
     def decode_flags(self, record):
@@ -351,15 +363,17 @@ class SPECFile(BinaryFile):
         """
         p_raw = record[i: i + p['n']]
         if p['timing'] == 0 and len(p_raw) > 2:
-            p_counter = (p_raw[-2] << 8) | p_raw[-1]
+            timing_upper = p_raw[-2]
+            timing_lower = p_raw[-1]
             p_raw = p_raw[:-2]
         else:
-            p_counter = 0
+            timing_upper = 0
+            timing_lower = 0
         p_decomp = self.decompress_image(p_raw)
 
-        return p_decomp, p_counter
+        return p_decomp, timing_upper, timing_lower
 
-    def store_image(self, p, p_img, p_decomp, p_len, images, p_time, frame, tas):
+    def store_image(self, p, p_img, p_decomp, p_len, images, record_time, timing_word_upper, timing_word_lower, particle_count, num_slices, frame, tas):
         """ If timeword present in current image, stores extracted image
         info in Images data object. Otherwise, concatenates current image
         data to existing image data.
@@ -403,13 +417,23 @@ class SPECFile(BinaryFile):
 
         if p['timing'] == 0:
             if p_len > 0:
-                epoch_time = math.modf((p_time - self.start_date).total_seconds())
+                epoch_time = math.modf((record_time - self.start_date).total_seconds())
                 images.image.append(p_img)
                 images.sec.append(epoch_time[1])
                 images.ns.append(epoch_time[0] * 1e9)
                 images.length.append(p_len)
                 images.buffer_index.append(frame)
                 images.tas.append(tas)
+                images.num_words.append(p['n'])
+                images.timing_flag.append(p['timing'])
+                images.mismatch_flag.append(p['mismatch'])
+                images.fifo_flag.append(p['fifo'])
+                images.overload_flag.append(p['overload'])
+                images.particle_count.append(particle_count)
+                images.num_slices.append(num_slices)
+                images.timing_word_upper.append(timing_word_upper)
+                images.timing_word_lower.append(timing_word_lower)
+
             p_img = None
             p_len = 0
 
