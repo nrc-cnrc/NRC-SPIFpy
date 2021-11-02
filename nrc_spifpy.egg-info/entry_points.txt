@@ -1,6 +1,0 @@
-
-        [console_scripts]
-        nrc-spifpy-extract=nrc_spifpy.scripts.extract:extract
-        nrc-spifpy-addaux=nrc_spifpy.scripts.addaux:addaux
-        nrc-spifpy-cc=nrc_spifpy.scripts.copyconf:copyconf
-    
