@@ -302,16 +302,23 @@ def decompress_complete_image(decoded_image):
         image_slice = [int(x) for x in range(0)]
 
         for slice_idx in slice_collection:
-            image_slice += [SHADED_VAL]*decoded_image['num_shaded'][slice_idx]
+
+            """
+            Be sure to append clear, THEN shaded
+            Order matters very much here
+            """
+
             image_slice += [CLEAR_VAL]*decoded_image['num_clear'][slice_idx]
+            image_slice += [SHADED_VAL]*decoded_image['num_shaded'][slice_idx]
         
         # Add some clear bits to any incomplete slices
 
         if len(image_slice) < 128:
             image_slice += [CLEAR_VAL] * (128 - len(image_slice))
-        
-        image_slices[i][:] = image_slice
 
+        image_slices[i, :] = image_slice
+
+    #breakpoint()
     return np.ravel(image_slices)
 
 class AssembledImageRecordContainer:
@@ -325,7 +332,7 @@ class AssembledImageRecordContainer:
         self.image_ns = np.array([], np.int32)
 
         self.image_len = np.array([], np.int32)
-        self.images = np.array([], dtype = np.uint8)
+        self.image = np.array([], dtype = np.uint8)
 
         # Auxiliaries not neccessary for the format
 
@@ -363,11 +370,12 @@ class ImageRecordAssembler:
         image_container_v = AssembledImageRecordContainer()
 
         image_container_h, image_container_v = self.set_buffer_info(
-            buffer_id, 
-            buffer_sec, 
-            buffer_ns,            
-            image_container_h,
-            image_container_v
+            buffer_id = buffer_id, 
+            buffer_sec = buffer_sec, 
+            buffer_ns = buffer_ns,        
+            num_images = len(metadata_containers),    
+            image_container_h = image_container_h,
+            image_container_v = image_container_v
         )
 
         image_container_h, image_container_v = self.set_image_tas(
@@ -392,15 +400,15 @@ class ImageRecordAssembler:
 
         return image_container_h, image_container_v
 
-    def set_buffer_info(self, buffer_id, buffer_sec, buffer_ns, image_container_h, image_container_v):
+    def set_buffer_info(self, buffer_id, buffer_sec, buffer_ns, num_images, image_container_h, image_container_v):
 
-        image_container_h.buffer_id[:] = buffer_id
-        image_container_h.image_sec[:] = buffer_sec
-        image_container_h.image_ns[:] = buffer_ns
+        image_container_h.buffer_id = np.zeros(num_images, dtype = np.int32) + buffer_id
+        image_container_h.image_sec = np.zeros(num_images, dtype = np.int32) + buffer_sec
+        image_container_h.image_ns = np.zeros(num_images, dtype = np.int32) + buffer_ns
 
-        image_container_v.buffer_id[:] = buffer_id
-        image_container_v.image_sec[:] = buffer_sec
-        image_container_v.image_ns[:] = buffer_ns
+        image_container_v.buffer_id = np.zeros(num_images, dtype = np.int32) + buffer_id
+        image_container_v.image_sec = np.zeros(num_images, dtype = np.int32) + buffer_sec
+        image_container_v.image_ns = np.zeros(num_images, dtype = np.int32) + buffer_ns
 
         return image_container_h, image_container_v
 
@@ -434,11 +442,11 @@ class ImageRecordAssembler:
             dtype = np.int32
         )
 
-        image_container_h.images = np.concatenate(
+        image_container_h.image = np.concatenate(
             [x.decompressed_image_h for x in decompressed_image_containers]
         )
 
-        image_container_v.images = np.concatenate(
+        image_container_v.image = np.concatenate(
             [x.decompressed_image_v for x in decompressed_image_containers]
         )
 
