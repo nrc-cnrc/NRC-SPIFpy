@@ -97,17 +97,17 @@ class ImageMetadataProcessor:
 
         metadata.buffer_idx = buffer_idx
 
-        metadata.n_h = self.num_words(buffer[buffer_idx + WORD_H_OFFSET])
-        metadata.timing_h = self.timing_words_not_found(buffer[buffer_idx + WORD_H_OFFSET])
-        metadata.mismatch_h = self.timing_word_mismatch(buffer[buffer_idx + WORD_H_OFFSET])
-        metadata.fifo_h = self.fifo_empty(buffer[buffer_idx + WORD_H_OFFSET])
-        metadata.overload_h = self.overload_timing_words_exist(buffer[buffer_idx + WORD_H_OFFSET])
+        metadata.n_h = num_words(buffer[buffer_idx + WORD_H_OFFSET])
+        metadata.timing_h = timing_words_not_found(buffer[buffer_idx + WORD_H_OFFSET])
+        metadata.mismatch_h = timing_word_mismatch(buffer[buffer_idx + WORD_H_OFFSET])
+        metadata.fifo_h = fifo_empty(buffer[buffer_idx + WORD_H_OFFSET])
+        metadata.overload_h = overload_timing_words_exist(buffer[buffer_idx + WORD_H_OFFSET])
 
-        metadata.n_v = self.num_words(buffer[buffer_idx + WORD_V_OFFSET])
-        metadata.timing_v = self.timing_words_not_found(buffer[buffer_idx + WORD_V_OFFSET])
-        metadata.mismatch_v = self.timing_word_mismatch(buffer[buffer_idx + WORD_V_OFFSET])
-        metadata.fifo_v = self.fifo_empty(buffer[buffer_idx + WORD_V_OFFSET])
-        metadata.overload_v = self.overload_timing_words_exist(buffer[buffer_idx + WORD_V_OFFSET])
+        metadata.n_v = num_words(buffer[buffer_idx + WORD_V_OFFSET])
+        metadata.timing_v = timing_words_not_found(buffer[buffer_idx + WORD_V_OFFSET])
+        metadata.mismatch_v = timing_word_mismatch(buffer[buffer_idx + WORD_V_OFFSET])
+        metadata.fifo_v = fifo_empty(buffer[buffer_idx + WORD_V_OFFSET])
+        metadata.overload_v = overload_timing_words_exist(buffer[buffer_idx + WORD_V_OFFSET])
 
         metadata.particle_count = buffer[buffer_idx + WORD_PC_OFFSET]
         metadata.num_slices = buffer[buffer_idx + WORD_NUM_SLICE_OFFSET]
@@ -117,37 +117,41 @@ class ImageMetadataProcessor:
 
         metadata.v_start = metadata.buffer_idx + METADATA_LENGTH + metadata.n_h
         metadata.v_end = metadata.v_start + metadata.n_v
-        
+
         metadata.frame_len = METADATA_LENGTH + metadata.n_h + metadata.n_v
         metadata.image_in_buffer = (metadata.buffer_idx + metadata.frame_len) < 2048
 
-
         return metadata
 
-    def num_words(self, word):
-        # Bit masking out of a 16-bit number
-        # to only get the 12 bit component
-        return word & 0b0000111111111111
+@jit(nopython = True)
+def num_words(word):
+    # Bit masking out of a 16-bit number
+    # to only get the 12 bit component
+    return word & 0b0000111111111111
 
-    def timing_words_not_found(self, word):
-        # Bitmask to get 12th bit only, then bit shift right
-        # 12 spots to keep only that bit
-        return (word & 0b0001000000000000) >> 12
+@jit(nopython = True)
+def timing_words_not_found(word):
+    # Bitmask to get 12th bit only, then bit shift right
+    # 12 spots to keep only that bit
+    return (word & 0b0001000000000000) >> 12
 
-    def timing_word_mismatch(self, word):
-        # Bitmask to get 13th bit only, then bit shift right
-        # 13 spots to keep only that bit
-        return (word & 0b0010000000000000) >> 13
+@jit(nopython = True)
+def timing_word_mismatch(word):
+    # Bitmask to get 13th bit only, then bit shift right
+    # 13 spots to keep only that bit
+    return (word & 0b0010000000000000) >> 13
 
-    def fifo_empty(self, word):
-        # Bitmask to get 14th bit only, then bit shift right
-        # 14 spots to keep only that bit
-        return (word & 0b0100000000000000) >> 14
+@jit(nopython = True)
+def fifo_empty(word):
+    # Bitmask to get 14th bit only, then bit shift right
+    # 14 spots to keep only that bit
+    return (word & 0b0100000000000000) >> 14
 
-    def overload_timing_words_exist(self, word):
-        # Bitmask to get 15th bit only, then bit shift right
-        # 15 spots to keep only that bit
-        return (word & 0b1000000000000000) >> 15
+@jit(nopython = True)
+def overload_timing_words_exist(word):
+    # Bitmask to get 15th bit only, then bit shift right
+    # 15 spots to keep only that bit
+    return (word & 0b1000000000000000) >> 15
 
 class RawImageContainer:
 
