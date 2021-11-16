@@ -172,3 +172,4 @@ class Buffer:
 
         self.assembled_images['h'] = assembled_images_h
         self.assembled_images['v'] = assembled_images_v
+

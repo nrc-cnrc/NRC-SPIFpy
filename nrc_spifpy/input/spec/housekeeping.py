@@ -1,6 +1,7 @@
 import numpy as np
 
 housekeeping_template = np.dtype([
+    ("housekeeping_packet_id", "i"), # This is to be filled just prior to writing into file
     ("buffer_id","i"),
     ("buffer_sec", "i"),
     ("buffer_ns", "i"),
@@ -125,3 +126,75 @@ def process_housekeeping(buffer_id, buffer_sec, buffer_ns, buffer_index, raw_hou
     housekeeping_container["timing_word_2"][:] =                     raw_housekeeping[52]  
 
     return housekeeping_container
+
+# A utility method to create the housekeeping group in a netcdf file
+
+def create_housekeeping_group(spiffile, inst_name):
+    hk_group = spiffile.rootgrp[inst_name].createGroup('aux-housekeeping')
+    hk_group.createDimension('Packet', None)
+
+# A utility method to define the extra image related variables in a netcdf file
+
+def add_housekeeping_variables(spiffile, inst_name, num_buffers):
+    hk_group = spiffile.rootgrp[inst_name]['aux-housekeeping']
+
+    if num_buffers < 128:
+        chunk_size = num_buffers
+    else:
+        chunk_size = 128
+
+    spiffile.create_variable( hk_group, "buffer_index",                 "i",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "buffer_sec",                   "i",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "buffer_ns",                    "i",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "incomplete_packet",            "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "hz_elem_0_voltage",            "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "hz_elem_64_voltage",           "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "hz_elem_127_voltage",          "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "v_elem_0_voltage",             "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "v_elem_64_voltage",            "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "v_elem_127_voltage",           "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "raw_pos_power_supply",         "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "raw_neg_power_supply",         "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "hz_arm_tx_temp",               "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "hz_arm_rx_temp",               "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "v_arm_tx_temp",                "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "v_arm_rx_temp",                "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "hz_tip_tx_temp",               "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "hz_tip_rx_temp",               "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "rear_opt_bridge_temp",         "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "dsp_board_temp",               "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "forward_vessel_temp",          "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "hz_laser_temp",                "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "v_laser_temp",                 "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "front_plate_temp",             "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "power_supply_temp",            "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "minus_5V_supply",              "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "plus_5V_supply",               "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "can_internal_pressure",        "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "hz_elem_21_voltage",           "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "hz_elem_42_voltage",           "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "hz_elem_85_voltage",           "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "hz_elem_106_voltage",          "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "v_elem_21_voltage",            "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "v_elem_42_voltage",            "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "v_elem_85_voltage",            "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "v_elem_106_voltage",           "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "num_v_particles_detected",     "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "num_h_particles_detected",     "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "heater_outputs",               "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "h_laser_drive",                "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "v_laser_drive",                "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "hz_masked_bits",               "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "v_masked_bits",                "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "num_stereo_particles_detected","u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "num_t_word_mismatch",          "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "num_slice_count_mismatch",     "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "num_hz_ov_periods",            "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "num_v_ov_periods",             "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "compression_conf",             "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "num_empty_fifo",               "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "spare_2",                      "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "spare_3",                      "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "tas",                          "f",  ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "timing_word_1",                "u2", ('Packet',), None, chunksizes=(chunk_size,) )
+    spiffile.create_variable( hk_group, "timing_word_2",                "u2", ('Packet',), None, chunksizes=(chunk_size,) )

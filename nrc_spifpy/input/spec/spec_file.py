@@ -6,6 +6,8 @@ from nrc_spifpy.input.binary_file import BinaryFile
 from nrc_spifpy.images import Images
 from nrc_spifpy.input.spec.buffer import Buffer
 from nrc_spifpy.input.spec.image import AssembledImageRecordContainer
+from nrc_spifpy.input.spec.housekeeping import add_housekeeping_variables, housekeeping_template, create_housekeeping_group
+
 from nrc_spifpy.input.spec.image import add_auxiliary_core_variables
 
 from tqdm import tqdm
@@ -87,11 +89,22 @@ class SPECFile(BinaryFile):
 
             add_auxiliary_core_variables(spiffile, group_h_channel)
             add_auxiliary_core_variables(spiffile, group_v_channel)
+
+            create_housekeeping_group(spiffile, group_h_channel)
+            create_housekeeping_group(spiffile, group_v_channel)
+
+            add_housekeeping_variables(spiffile, group_h_channel, len(self.data))
+            add_housekeeping_variables(spiffile, group_v_channel, len(self.data))
+
         else:
             spiffile.create_inst_group(group_no_channel)
             spiffile.set_filenames_attr(group_no_channel, self.filename)
 
+            create_housekeeping_group(spiffile, group_no_channel)
+
             add_auxiliary_core_variables(self, spiffile, group_no_channel)
+            add_housekeeping_variables(spiffile, group_no_channel, len(self.data))
+
 
         spiffile.write_buffer_info(self.start_date, self.datetimes)
 
@@ -110,13 +123,20 @@ class SPECFile(BinaryFile):
 
             chunk_processor = ChunkedBufferProcessor(buffer_ids, buffer_timestamps, buffers)
             chunk_processor.process_buffers()
+            housekeeping = chunk_processor.merge_housekeeping()
             images_h, images_v = chunk_processor.merge_assembled_images()
 
             if self.name == '2DS':
-                self.write_data(spiffile, group_h_channel, images_h)
-                self.write_data(spiffile, group_v_channel, images_v)
+                self.write_image_data(spiffile, group_h_channel, images_h)
+                self.write_image_data(spiffile, group_v_channel, images_v)
+
+                self.write_housekeeping_data(spiffile, group_h_channel, housekeeping)
+                self.write_housekeeping_data(spiffile, group_v_channel, housekeeping)
+
             else:
-                self.write_data(spiffile, group_no_channel, images_h)
+                self.write_image_data(spiffile, group_no_channel, images_h)
+
+                self.write_housekeeping_data(spiffile, group_no_channel, housekeeping)
 
             pbar1.update(chunk_intervals[i + 1] - chunk_intervals[i])
 
@@ -131,7 +151,7 @@ class SPECFile(BinaryFile):
         return chunk_intervals
 
 
-    def write_data(self, spiffile, instrument, images):
+    def write_image_data(self, spiffile, instrument, images):
         """ Called each time number of unsaved processed images exceeds
         10,000. Writes H and V images to SPIF NetCDF file.
         Parameters
@@ -173,14 +193,93 @@ class SPECFile(BinaryFile):
 
         spiffile.rootgrp.sync()
 
+    def write_housekeeping_data(self, spiffile, instrument, housekeeping):
+        """ 
+        Called each time number of unsaved processed images exceeds
+        10,000. Writes H and V images to SPIF NetCDF file.
+        Parameters
+        ----------
+        spiffile : SPIFFile object
+            SPIFFile object of current SPIF NetCDF output file
+        h_p : Images object
+            Images object containing processed H array image info.
+        v_p : Images object
+            Images object containing processed V array image info.
+        """
+
+        instgrp = spiffile.rootgrp[instrument]
+        hk_group = spiffile.rootgrp[instrument]['aux-housekeeping']
+
+        dim_size = len(hk_group.dimensions['Packet'])
+
+        # Primary, critical SPIF variables
+
+        spiffile.write_variable( hk_group, "buffer_index",                  housekeeping["buffer_id"][:], dim_size)
+        spiffile.write_variable( hk_group, "buffer_sec",                    housekeeping["buffer_sec"][:], dim_size)
+        spiffile.write_variable( hk_group, "buffer_ns",                     housekeeping["buffer_ns"][:], dim_size)
+        spiffile.write_variable( hk_group, "incomplete_packet",             housekeeping["incomplete_packet"][:], dim_size)
+        spiffile.write_variable( hk_group, "hz_elem_0_voltage",             housekeeping["hz_elem_0_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "hz_elem_64_voltage",            housekeeping["hz_elem_64_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "hz_elem_127_voltage",           housekeeping["hz_elem_127_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "v_elem_0_voltage",              housekeeping["v_elem_0_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "v_elem_64_voltage",             housekeeping["v_elem_64_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "v_elem_127_voltage",            housekeeping["v_elem_127_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "raw_pos_power_supply",          housekeeping["raw_pos_power_supply"][:], dim_size)
+        spiffile.write_variable( hk_group, "raw_neg_power_supply",          housekeeping["raw_neg_power_supply"][:], dim_size)
+        spiffile.write_variable( hk_group, "hz_arm_tx_temp",                housekeeping["hz_arm_tx_temp"][:], dim_size)
+        spiffile.write_variable( hk_group, "hz_arm_rx_temp",                housekeeping["hz_arm_rx_temp"][:], dim_size)
+        spiffile.write_variable( hk_group, "v_arm_tx_temp",                 housekeeping["v_arm_tx_temp"][:], dim_size)
+        spiffile.write_variable( hk_group, "v_arm_rx_temp",                 housekeeping["v_arm_rx_temp"][:], dim_size)
+        spiffile.write_variable( hk_group, "hz_tip_tx_temp",                housekeeping["hz_tip_tx_temp"][:], dim_size)
+        spiffile.write_variable( hk_group, "hz_tip_rx_temp",                housekeeping["hz_tip_rx_temp"][:], dim_size)
+        spiffile.write_variable( hk_group, "rear_opt_bridge_temp",          housekeeping["rear_opt_bridge_temp"][:], dim_size)
+        spiffile.write_variable( hk_group, "dsp_board_temp",                housekeeping["dsp_board_temp"][:], dim_size)
+        spiffile.write_variable( hk_group, "forward_vessel_temp",           housekeeping["forward_vessel_temp"][:], dim_size)
+        spiffile.write_variable( hk_group, "hz_laser_temp",                 housekeeping["hz_laser_temp"][:], dim_size)
+        spiffile.write_variable( hk_group, "v_laser_temp",                  housekeeping["v_laser_temp"][:], dim_size)
+        spiffile.write_variable( hk_group, "front_plate_temp",              housekeeping["front_plate_temp"][:], dim_size)
+        spiffile.write_variable( hk_group, "power_supply_temp",             housekeeping["power_supply_temp"][:], dim_size)
+        spiffile.write_variable( hk_group, "minus_5V_supply",               housekeeping["minus_5V_supply"][:], dim_size)
+        spiffile.write_variable( hk_group, "plus_5V_supply",                housekeeping["plus_5V_supply"][:], dim_size)
+        spiffile.write_variable( hk_group, "can_internal_pressure",         housekeeping["can_internal_pressure"][:], dim_size)      
+        spiffile.write_variable( hk_group, "hz_elem_21_voltage",            housekeeping["hz_elem_21_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "hz_elem_42_voltage",            housekeeping["hz_elem_42_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "hz_elem_85_voltage",            housekeeping["hz_elem_85_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "hz_elem_106_voltage",           housekeeping["hz_elem_106_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "v_elem_21_voltage",             housekeeping["v_elem_21_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "v_elem_42_voltage",             housekeeping["v_elem_42_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "v_elem_85_voltage",             housekeeping["v_elem_85_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "v_elem_106_voltage",            housekeeping["v_elem_106_voltage"][:], dim_size)
+        spiffile.write_variable( hk_group, "num_v_particles_detected",      housekeeping["num_v_particles_detected"][:], dim_size)
+        spiffile.write_variable( hk_group, "num_h_particles_detected",      housekeeping["num_h_particles_detected"][:], dim_size)
+        spiffile.write_variable( hk_group, "heater_outputs",                housekeeping["heater_outputs"][:], dim_size)
+        spiffile.write_variable( hk_group, "h_laser_drive",                 housekeeping["h_laser_drive"][:], dim_size)
+        spiffile.write_variable( hk_group, "v_laser_drive",                 housekeeping["v_laser_drive"][:], dim_size)
+        spiffile.write_variable( hk_group, "hz_masked_bits",                housekeeping["hz_masked_bits"][:], dim_size)
+        spiffile.write_variable( hk_group, "v_masked_bits",                 housekeeping["v_masked_bits"][:], dim_size)
+        spiffile.write_variable( hk_group, "num_stereo_particles_detected", housekeeping["num_stereo_particles_detected"][:], dim_size)
+        spiffile.write_variable( hk_group, "num_t_word_mismatch",           housekeeping["num_t_word_mismatch"][:], dim_size)
+        spiffile.write_variable( hk_group, "num_slice_count_mismatch",      housekeeping["num_slice_count_mismatch"][:], dim_size)
+        spiffile.write_variable( hk_group, "num_hz_ov_periods",             housekeeping["num_hz_ov_periods"][:], dim_size)
+        spiffile.write_variable( hk_group, "num_v_ov_periods",              housekeeping["num_v_ov_periods"][:], dim_size)
+        spiffile.write_variable( hk_group, "compression_conf",              housekeeping["compression_conf"][:], dim_size)
+        spiffile.write_variable( hk_group, "num_empty_fifo",                housekeeping["num_empty_fifo"][:], dim_size)
+        spiffile.write_variable( hk_group, "tas",                           housekeeping["tas"][:], dim_size)
+        spiffile.write_variable( hk_group, "timing_word_1",                 housekeeping["timing_word_1"][:], dim_size)
+        spiffile.write_variable( hk_group, "timing_word_2",                 housekeeping["timing_word_2"][:], dim_size)
+        
+        spiffile.rootgrp.sync()
+
 class ChunkedBufferProcessor:
 
-    def __init__(self, buffer_ids, buffer_timestamps, buffers):
+    def __init__(self, buffer_ids, buffer_timestamps, raw_buffers):
         self.buffer_ids = buffer_ids
         self.buffer_timestamps = buffer_timestamps
-        self.buffers = buffers
+        self.raw_buffers = raw_buffers
 
-        self.output = [None]*len(buffers)
+        self.processed_buffers = [None]*len(raw_buffers)
+
+        self.output = [None]*len(raw_buffers)
 
 
     def process_buffers(self):
@@ -189,12 +288,14 @@ class ChunkedBufferProcessor:
             self.output[i] = self.process_buffer(
                 self.buffer_ids[i],
                 self.buffer_timestamps[i],
-                self.buffers[i]
+                self.raw_buffers[i]
             )
 
     def process_buffer(self, buffer_id, buffer_timestamp, buffer):
 
         buffer = Buffer(buffer_id, buffer_timestamp, buffer)
+        self.processed_buffers[buffer_id] = buffer
+
         return buffer.assembled_images
 
     def merge_assembled_images(self):
@@ -208,3 +309,12 @@ class ChunkedBufferProcessor:
 
         return image_container_h, image_container_v
 
+    def merge_housekeeping(self):
+        housekeeping_data = np.array([], dtype = housekeeping_template)
+
+        for buffer in self.processed_buffers:
+            housekeeping_data = np.append(housekeeping_data, buffer.housekeeping)
+
+        housekeeping_data['housekeeping_packet_id'] = np.arange(0,len(housekeeping_data))
+
+        return housekeeping_data
