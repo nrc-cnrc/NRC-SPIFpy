@@ -138,7 +138,7 @@ class Buffer:
         raw_housekeeping_packet = self.buffer[buffer_idx:buffer_idx + 53]
 
         self.housekeeping.append(
-            housekeeping.process_housekeeping(raw_housekeeping_packet)
+            housekeeping.process_housekeeping(self.buffer_id, self.buffer_sec, self.buffer_ns, raw_housekeeping_packet)
         )
 
     def process_masks(self, buffer_idx):
