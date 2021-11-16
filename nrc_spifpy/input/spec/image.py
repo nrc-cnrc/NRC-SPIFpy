@@ -4,6 +4,8 @@ from numba import types, typed, typeof
 from numba import jit
 from numba.experimental import jitclass
 
+from nrc_spifpy.spif import TIME_CHUNK
+
 # The size of the metadata in a particle record
 # Word 1 = Flag 2S
 # Word 2 = word for h image metadata
@@ -481,3 +483,128 @@ class ImageRecordAssembler:
         image_container_v.timeword_lower = np.array([x.timeword_v_lower for x in timewords], dtype = np.uint16)
 
         return image_container_h, image_container_v
+
+# A utility method to define the extra image related variables in a netcdf file
+
+def add_auxiliary_core_variables(spiffile, inst_name):
+        coregrp = spiffile.rootgrp[inst_name]['core']
+
+        spiffile.create_variable(
+            coregrp,
+            'num_words',
+            'u2',
+            ('Images',),
+            {
+                'long_name':'Number of data words present in image',
+                'units':'counts'
+            },
+            chunksizes=(TIME_CHUNK,)
+        )
+
+        spiffile.create_variable(
+            coregrp,
+            'timing_flag',
+            'u2',
+            ('Images',),
+            {
+                'long_name':'Timing flag for image',
+                'units':'boolean'
+            },
+            chunksizes=(TIME_CHUNK,)
+        )
+
+        spiffile.create_variable(
+            coregrp,
+            'mismatch_flag',
+            'u2',
+            ('Images',),
+            {
+                'long_name':'Mismatch flag for image',
+                'units':'boolean'
+            },
+            chunksizes=(TIME_CHUNK,)
+        )
+
+        spiffile.create_variable(
+            coregrp,
+            'fifo_flag',
+            'u2',
+            ('Images',),
+            {
+                'long_name':'FIFO flag for image',
+                'units':'boolean'
+            },
+            chunksizes=(TIME_CHUNK,)
+        )
+
+        spiffile.create_variable(
+            coregrp,
+            'overload_flag',
+            'u2',
+            ('Images',),
+            {
+                'long_name':'Overload flag for image',
+                'units':'binary'
+            },
+            chunksizes=(TIME_CHUNK,)
+        )
+
+        spiffile.create_variable(
+            coregrp,
+            'particle_count',
+            'u2',
+            ('Images',),
+            {
+                'long_name':'Number of particles detected in image',
+                'units':'counts'
+            },
+            chunksizes=(TIME_CHUNK,)
+        )
+        
+        spiffile.create_variable(
+            coregrp,
+            'num_slices',
+            'u2',
+            ('Images',),
+            {
+                'long_name':'Number of slices detected in the image',
+                'units':'counts'
+            },
+            chunksizes=(TIME_CHUNK,)
+        )
+
+        spiffile.create_variable(
+            coregrp,
+            'timeword_upper',
+            'u2',
+            ('Images',),
+            {
+                'long_name':'Upper 16 bits of timeword for image',
+                'units':'clock ticks'
+            },
+            chunksizes=(TIME_CHUNK,)
+        )
+
+        spiffile.create_variable(
+            coregrp,
+            'timeword_lower',
+            'u2',
+            ('Images',),
+            {
+                'long_name':'Lower 16 bits of timeword for image',
+                'units':'clock ticks'
+            },
+            chunksizes=(TIME_CHUNK,)
+        )
+
+        spiffile.create_variable(
+            coregrp,
+            'tas',
+            'f',
+            ('Images',),
+            {
+                'long_name':'True airspeed as recorded by probe',
+                'units':'m/s'
+            },
+            chunksizes=(TIME_CHUNK,)
+        )
