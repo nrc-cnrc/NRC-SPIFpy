@@ -162,10 +162,10 @@ class RawImageContainer:
 class ImageTimewordContainer:
 
     def __init__(self) -> None:
-        self.upper_timeword_h = 0
-        self.lower_timeword_h = 0
-        self.upper_timeword_v = 0
-        self.lower_timeword_v = 0
+        self.timeword_h_upper = 0
+        self.timeword_h_lower = 0
+        self.timeword_v_upper = 0
+        self.timeword_v_lower = 0
 
 class RawImageExtractor:
 
@@ -197,12 +197,12 @@ class RawImageExtractor:
         raw_image_v = buffer[metadata.h_start:metadata.h_end]
 
         if (metadata.timing_h == 0) and (len(raw_image_h) >= 2):
-            self.image_timeword_container.upper_timeword_h = raw_image_h[-2]
-            self.image_timeword_container.lower_timeword_h = raw_image_h[-1]
+            self.image_timeword_container.timeword_h_upper = raw_image_h[-2]
+            self.image_timeword_container.timeword_h_lower = raw_image_h[-1]
 
         if (metadata.timing_v == 0) and (len(raw_image_v) >= 2):
-            self.image_timeword_container.upper_timeword_v = raw_image_v[-2]
-            self.image_timeword_container.lower_timeword_v = raw_image_v[-1]
+            self.image_timeword_container.timeword_v_upper = raw_image_v[-2]
+            self.image_timeword_container.timeword_v_lower = raw_image_v[-1]
 
         return self.image_timeword_container
 
@@ -312,14 +312,164 @@ def decompress_complete_image(decoded_image):
         
         image_slices[i][:] = image_slice
 
-    return image_slices
+    return np.ravel(image_slices)
 
 class AssembledImageRecordContainer:
 
     def __init__(self) -> None:
-        pass
+
+        # Critical variables for the SPIF format
+
+        self.buffer_id = np.array([], np.int32)
+        self.image_sec = np.array([], np.int32)
+        self.image_ns = np.array([], np.int32)
+
+        self.image_len = np.array([], np.int32)
+        self.images = np.array([], dtype = np.uint8)
+
+        # Auxiliaries not neccessary for the format
+
+        self.num_words = np.array([], dtype = np.uint16)
+        self.timing_flag = np.array([], dtype = np.uint16)
+        self.mismatch_flag = np.array([], dtype = np.uint16)
+        self.fifo_flag = np.array([], dtype = np.uint16)
+        self.overload_flag = np.array([], dtype = np.uint16)
+
+        self.particle_count = np.array([], dtype = np.uint16)
+        self.num_slices = np.array([], dtype = np.uint16)
+
+        self.timeword_upper = np.array([], dtype = np.uint16)
+        self.timeword_lower = np.array([], dtype = np.uint16)
+
+        self.tas = np.array([], dtype = np.float32)
 
 class ImageRecordAssembler:
 
     def __init__(self) -> None:
         pass
+
+    def assemble_images(
+        self,
+        buffer_id,
+        buffer_sec,
+        buffer_ns,
+        metadata_containers,
+        timeword_containers,
+        decompressed_image_containers,
+        housekeeping
+    ):
+
+        image_container_h = AssembledImageRecordContainer()
+        image_container_v = AssembledImageRecordContainer()
+
+        image_container_h, image_container_v = self.set_buffer_info(
+            buffer_id, 
+            buffer_sec, 
+            buffer_ns,            
+            image_container_h,
+            image_container_v
+        )
+
+        image_container_h, image_container_v = self.set_image_tas(
+            housekeeping = housekeeping,
+            num_images = len(metadata_containers),
+            image_container_h = image_container_h,
+            image_container_v = image_container_v
+        )
+
+        image_container_h, image_container_v = self.set_images(
+            image_container_h,
+            image_container_v,
+            decompressed_image_containers
+        )
+
+        image_container_h, image_container_v = self.set_auxiliaries(
+            metadata_containers, 
+            timeword_containers,
+            image_container_h, 
+            image_container_v
+        )
+
+        return image_container_h, image_container_v
+
+    def set_buffer_info(self, buffer_id, buffer_sec, buffer_ns, image_container_h, image_container_v):
+
+        image_container_h.buffer_id[:] = buffer_id
+        image_container_h.image_sec[:] = buffer_sec
+        image_container_h.image_ns[:] = buffer_ns
+
+        image_container_v.buffer_id[:] = buffer_id
+        image_container_v.image_sec[:] = buffer_sec
+        image_container_v.image_ns[:] = buffer_ns
+
+        return image_container_h, image_container_v
+
+    def set_image_tas(self, housekeeping, num_images, image_container_h, image_container_v):
+
+        housekeeping = housekeeping[ housekeeping['incomplete_packet'] == 0 ]
+
+        if len(housekeeping) == 0:
+            tas = np.zeros(num_images)*np.nan
+        else:
+            tas = np.zeros(num_images, dtype = np.float32) + housekeeping['tas'][-1]
+
+        image_container_h.tas = tas
+        image_container_v.tas = tas
+
+        return image_container_h, image_container_v
+
+    def set_images(
+        self,
+        image_container_h,
+        image_container_v,
+        decompressed_image_containers
+    ):
+        image_container_h.image_len = np.array(
+            [len(x.decompressed_image_h) / 128 for x in decompressed_image_containers],
+            dtype = np.int32
+        )
+
+        image_container_v.image_len = np.array(
+            [len(x.decompressed_image_v) / 128 for x in decompressed_image_containers],
+            dtype = np.int32
+        )
+
+        image_container_h.images = np.concatenate(
+            [x.decompressed_image_h for x in decompressed_image_containers]
+        )
+
+        image_container_v.images = np.concatenate(
+            [x.decompressed_image_v for x in decompressed_image_containers]
+        )
+
+        return image_container_h, image_container_v
+
+    def set_auxiliaries(
+        self, 
+        metadata, 
+        timewords,
+        image_container_h, 
+        image_container_v
+    ):
+
+        image_container_h.num_words      = np.array([x.n_h for x in metadata], dtype = np.uint16)
+        image_container_h.timing_flag    = np.array([x.timing_h for x in metadata], dtype = np.uint16)
+        image_container_h.mismatch_flag  = np.array([x.mismatch_h for x in metadata], dtype = np.uint16)
+        image_container_h.fifo_flag      = np.array([x.fifo_h for x in metadata], dtype = np.uint16)
+        image_container_h.overload_flag  = np.array([x.overload_h for x in metadata], dtype = np.uint16)
+        image_container_h.particle_count = np.array([x.particle_count for x in metadata], dtype = np.uint16)
+        image_container_h.num_slices     = np.array([x.num_slices for x in metadata], dtype = np.uint16)
+        image_container_h.timeword_upper = np.array([x.timeword_h_upper for x in timewords], dtype = np.uint16)
+        image_container_h.timeword_lower = np.array([x.timeword_h_lower for x in timewords], dtype = np.uint16)
+
+        image_container_v.num_words      = np.array([x.n_v for x in metadata], dtype = np.uint16)
+        image_container_v.timing_flag    = np.array([x.timing_v for x in metadata], dtype = np.uint16)
+        image_container_v.mismatch_flag  = np.array([x.mismatch_v for x in metadata], dtype = np.uint16)
+        image_container_v.fifo_flag      = np.array([x.fifo_v for x in metadata], dtype = np.uint16)
+        image_container_v.overload_flag  = np.array([x.overload_v for x in metadata], dtype = np.uint16)
+        image_container_v.particle_count = np.array([x.particle_count for x in metadata], dtype = np.uint16)
+        image_container_v.num_slices     = np.array([x.num_slices for x in metadata], dtype = np.uint16)
+        image_container_v.timeword_upper = np.array([x.timeword_v_upper for x in timewords], dtype = np.uint16)
+        image_container_v.timeword_lower = np.array([x.timeword_v_lower for x in timewords], dtype = np.uint16)
+
+        return image_container_h, image_container_v

@@ -165,6 +165,10 @@ class Buffer:
             self.buffer_sec,
             self.buffer_ns,
             self.metadata_containers,
+            self.timeword_containers,
             self.decompressed_image_containers,
             self.housekeeping
         )
+
+        self.assembled_images['h'] = assembled_images_h
+        self.assembled_images['v'] = assembled_images_v
