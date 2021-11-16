@@ -4,6 +4,7 @@ housekeeping_template = np.dtype([
     ("buffer_id","i"),
     ("buffer_sec", "i"),
     ("buffer_ns", "i"),
+    ("buffer_index","u2"),
     ("incomplete_packet", "u2"),
     ("hz_elem_0_voltage","f"),
     ("hz_elem_64_voltage","f"),
@@ -58,12 +59,13 @@ housekeeping_template = np.dtype([
     ("timing_word_2","u2")
 ])
 
-def process_housekeeping(buffer_id, buffer_sec, buffer_ns, raw_housekeeping):
+def process_housekeeping(buffer_id, buffer_sec, buffer_ns, buffer_index, raw_housekeeping):
     housekeeping_container = np.zeros(1, dtype = housekeeping_template)
 
     housekeeping_container['buffer_id'][:] = buffer_id
     housekeeping_container['buffer_sec'][:] = buffer_sec
     housekeeping_container['buffer_ns'][:] = buffer_ns
+    housekeeping_container['buffer_index'][:] = buffer_index
 
     if len(raw_housekeeping) < 53:
         raw_housekeeping = np.append( raw_housekeeping, [0] * (53 - len(raw_housekeeping)) )

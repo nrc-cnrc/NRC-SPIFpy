@@ -54,7 +54,12 @@ class Buffer:
         self.image_timewords = []
         self.decoded_image_containers = []
 
-        self.housekeeping = []
+        self.assembled_images = {
+            'h':None,
+            'v':None
+        }
+
+        self.housekeeping = np.array([], dtype = housekeeping.housekeeping_template)
         self.masks = []
 
         self.alloc_frames()
@@ -62,6 +67,8 @@ class Buffer:
         self.extract_raw_images()
         self.decode_images()
         self.decompress_images()
+
+        self.assemble_image_records()
 
     def get_buffer_sec(self, buffer_ts):
         return int(np.floor(buffer_ts))
@@ -71,28 +78,28 @@ class Buffer:
 
     def alloc_frames(self):
         
-        buffer_idx = 0
+        buffer_index = 0
 
-        while buffer_idx <  2048 - 5:
-                flag = self.buffer[buffer_idx]
+        while buffer_index <  2048 - 5:
+                flag = self.buffer[buffer_index]
 
                 if flag == DATA_FLAG:
-                    buffer_idx = self.get_image_metadata_container(buffer_idx)
+                    buffer_index = self.get_image_metadata_container(buffer_index)
                 elif flag == HK_FLAG:
-                    self.process_housekeeping(buffer_idx)
-                    buffer_idx += 53
+                    self.process_housekeeping(buffer_index)
+                    buffer_index += 53
                 elif flag == MK_FLAG:
-                    self.process_masks(buffer_idx)
-                    buffer_idx += 23
+                    self.process_masks(buffer_index)
+                    buffer_index += 23
                 else:
-                    buffer_idx += 1
+                    buffer_index += 1
     
-    def get_image_metadata_container(self, buffer_idx):
-        image_metadata_container = self.metadata_processor.process_metadata(buffer_idx, self.buffer)
+    def get_image_metadata_container(self, buffer_index):
+        image_metadata_container = self.metadata_processor.process_metadata(buffer_index, self.buffer)
 
         self.metadata_containers.append(image_metadata_container)
 
-        return buffer_idx + image_metadata_container.frame_len
+        return buffer_index + image_metadata_container.frame_len
 
 
     def extract_raw_images(self):
@@ -134,14 +141,30 @@ class Buffer:
 
         self.decompressed_image_containers = decompressed_image_containers
 
-    def process_housekeeping(self, buffer_idx):
-        raw_housekeeping_packet = self.buffer[buffer_idx:buffer_idx + 53]
+    def process_housekeeping(self, buffer_index):
+        raw_housekeeping_packet = self.buffer[buffer_index:buffer_index + 53]
 
-        self.housekeeping.append(
-            housekeeping.process_housekeeping(self.buffer_id, self.buffer_sec, self.buffer_ns, raw_housekeeping_packet)
+        self.housekeeping = np.append(
+            self.housekeeping,
+            housekeeping.process_housekeeping(
+                self.buffer_id, 
+                self.buffer_sec, 
+                self.buffer_ns,
+                buffer_index,
+                raw_housekeeping_packet
+            )
         )
 
-    def process_masks(self, buffer_idx):
+    def process_masks(self, buffer_index):
         pass
 
-    def assemble_image_records(self): pass
+    def assemble_image_records(self):
+
+        assembled_images_h, assembled_images_v = self.image_record_assembler.assemble_images(
+            self.buffer_id,
+            self.buffer_sec,
+            self.buffer_ns,
+            self.metadata_containers,
+            self.decompressed_image_containers,
+            self.housekeeping
+        )
