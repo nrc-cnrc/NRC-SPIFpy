@@ -5,6 +5,7 @@ from nrc_spifpy.input.spec.image import RawImageExtractor
 from nrc_spifpy.input.spec.image import RawImageDecoder
 from nrc_spifpy.input.spec.image import DecodedImageDecompressor
 from nrc_spifpy.input.spec.image import ImageRecordAssembler
+from nrc_spifpy.input.spec.image import AssembledImageRecordContainer
 
 from nrc_spifpy.input.spec import housekeeping
 
@@ -172,4 +173,5 @@ class Buffer:
 
         self.assembled_images['h'] = assembled_images_h
         self.assembled_images['v'] = assembled_images_v
+    
 

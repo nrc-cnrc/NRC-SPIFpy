@@ -196,7 +196,7 @@ class RawImageExtractor:
         self.image_timeword_container = ImageTimewordContainer()
     
         raw_image_h = buffer[metadata.h_start:metadata.h_end]
-        raw_image_v = buffer[metadata.h_start:metadata.h_end]
+        raw_image_v = buffer[metadata.v_start:metadata.v_end]
 
         if (metadata.timing_h == 0) and (len(raw_image_h) >= 2):
             self.image_timeword_container.timeword_h_upper = raw_image_h[-2]
@@ -298,8 +298,8 @@ def get_complete_image_slice_inds(start_slice_flags):
 def decompress_complete_image(decoded_image):
     image_slice_inds = get_complete_image_slice_inds(decoded_image['is_start_slice'])
 
-    image_slices = np.zeros( (len(image_slice_inds), 128), dtype = np.uint8)
-
+    image_slices = [int(x) for x in range(0)]
+    #breakpoint()
     for i, slice_collection in enumerate(image_slice_inds):
         image_slice = [int(x) for x in range(0)]
 
@@ -318,10 +318,14 @@ def decompress_complete_image(decoded_image):
         if len(image_slice) < 128:
             image_slice += [CLEAR_VAL] * (128 - len(image_slice))
 
-        image_slices[i, :] = image_slice
+        # NOTE -> This is a TEMPORARY fix to a very strange encountered problem. To be sorted out later.
 
-    #breakpoint()
-    return np.ravel(image_slices)
+        if len(image_slice) > 128:
+            image_slice += [CLEAR_VAL] * int(128*np.ceil(len(image_slice)/128) - len(image_slice) )
+
+        image_slices += image_slice
+
+    return np.array(image_slices, dtype=np.uint8)
 
 class AssembledImageRecordContainer:
 
@@ -387,18 +391,20 @@ class ImageRecordAssembler:
             image_container_v = image_container_v
         )
 
-        image_container_h, image_container_v = self.set_images(
-            image_container_h,
-            image_container_v,
-            decompressed_image_containers
-        )
+        if len(metadata_containers) > 0:
 
-        image_container_h, image_container_v = self.set_auxiliaries(
-            metadata_containers, 
-            timeword_containers,
-            image_container_h, 
-            image_container_v
-        )
+            image_container_h, image_container_v = self.set_images(
+                image_container_h,
+                image_container_v,
+                decompressed_image_containers
+            )
+
+            image_container_h, image_container_v = self.set_auxiliaries(
+                metadata_containers, 
+                timeword_containers,
+                image_container_h, 
+                image_container_v
+            )
 
         return image_container_h, image_container_v
 

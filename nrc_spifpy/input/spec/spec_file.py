@@ -94,7 +94,7 @@ class SPECFile(BinaryFile):
 
             create_housekeeping_group(spiffile, group_no_channel)
 
-            add_auxiliary_core_variables(self, spiffile, group_no_channel)
+            add_auxiliary_core_variables(spiffile, group_no_channel)
             add_housekeeping_variables(spiffile, group_no_channel, len(self.data))
 
 
@@ -126,8 +126,7 @@ class SPECFile(BinaryFile):
                 self.write_housekeeping_data(spiffile, group_v_channel, housekeeping)
 
             else:
-                self.write_image_data(spiffile, group_no_channel, images_h)
-
+                self.write_image_data(spiffile, group_no_channel, images_v)
                 self.write_housekeeping_data(spiffile, group_no_channel, housekeeping)
 
             pbar1.update(chunk_intervals[i + 1] - chunk_intervals[i])
@@ -359,7 +358,7 @@ class SPECFileTASPostProcessor:
 
         f = interp1d(buffer_id_hk, tas_hk, kind = 'previous', fill_value='extrapolate')
 
-        interpolated_tas = f( np.sort(np.unique(buffer_id_core.data)) )
+        interpolated_tas = f( np.arange(0,np.max(buffer_id_core) + 1) )
 
         updated_core_tas = interpolated_tas[buffer_id_core]
 
