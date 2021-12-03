@@ -41,7 +41,6 @@ class DMTMonoFile(DMTBinaryFile):
                                        ('second', 'u2'),
                                        ('ms', 'u2'),
                                        ('weekday', 'u2'),
-                                       # ('dummy', '(12, )B'),
                                        ('data', '(4096, )B')
                                        ])
 
