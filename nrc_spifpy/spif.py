@@ -64,40 +64,8 @@ class SPIFCore(object):
         self.spiffile.create_file()
         self.instfile.read()
 
-        ind_min, ind_max = self.get_start_stop_inds()
-
-        self.slice_dataset(ind_min, ind_max)
-
         self.instfile.process_file(self.spiffile, processors)
         self.spiffile.close()
-
-    def get_start_stop_inds(self):
-        file_datetimes = self.instfile.datetimes
-
-        # The defaults if no start and end time are specified
-
-        if self.start_time is not None:
-            time_min = self.instfile.start_date + self.start_time
-            time_min = [i for i,x in enumerate(file_datetimes) if x >= time_min]
-            time_min = time_min[0]
-        else:
-            time_min = 0
-
-        if self.end_time is not None:
-            time_max = self.instfile.start_date + self.end_time
-            time_max = [i for i,x in enumerate(file_datetimes) if x <= time_max]
-            time_max = time_max[-1] + 1
-        else:
-            time_max = len(file_datetimes) + 1
-
-        return time_min, time_max
-
-    def slice_dataset(self, ind_min, ind_max):
-        self.instfile.data = self.instfile.data[ind_min:ind_max]
-
-        "We now need to reset the timestamps as well, since we have cut the data"
-
-        self.instfile.calc_buffer_datetimes()
 
     def get_config(self, config_file):
         """ Given config filename, open and return configparser object.
@@ -248,8 +216,6 @@ class SPIFFile(object):
         instgrp.createDimension('Images', None)
         instgrp.createDimension('Buffers', None)
         instgrp.createDimension('Pixels', None)
-        # instgrp.createDimension('Array', n_pixels)
-        # instgrp.createDimension('Slices', None)
 
         instgrp.setncatts(self.attrs['instrument'])
         for var, var_type in self.inst_scalars.items():
