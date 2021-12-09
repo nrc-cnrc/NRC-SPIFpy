@@ -1,7 +1,7 @@
 # NRC SPIFpy
 
 NRC's Single Particle Image Format (SPIF) conversion utility. 
-Version 1.0 (Release date 9 December, 2021)?
+Version 1.0 (Release date 9 December, 2021)
 
 ## About
 
