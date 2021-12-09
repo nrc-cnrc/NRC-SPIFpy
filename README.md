@@ -1,23 +1,24 @@
 # NRC SPIFpy
 
 NRC's Single Particle Image Format (SPIF) conversion utility. 
-Ver. 1.0? (Release date October 2021)?
+Version 1.0 (Release date 9 December, 2021)?
 
 ## About
 
-**SPIFpy** is a set of Command Line Interface(CLI) tools which allow for the conversion of files stored in a 
+**NRC-SPIFpy** is a set of Command Line Interface(CLI) tools which allow for the conversion of files stored in a 
 variety of raw imaging probe formats to the **SPIF** format. The package is written in **Python**, 
 and includes the following utilities:
 
-- `spifpy`: Convert a file in a raw imaging probe format to the **SPIF** format.
-- `spifaddaux`: Add auxiliary data to a file in the **SPIF** format.
-- `spifcc`: Copy the configuration files required for processing with `spifpy` and `spifaddaux`.
+- `nrc-spifpy-extract`: Convert a file in a raw imaging probe format to the **SPIF** format.
+- `nrc-spifpy-addaux`: Add auxiliary data to a file in the **SPIF** format.
+- `nrc-spifpy-cc`: Copy the configuration files required for processing with `spifpy` and `spifaddaux`.
 
 ## Installation Requirements
-
 - Python 3.6+
-- Linux/MacOS : Any python environment manager
+- Linux/MacOS : Any python environment manager (pyenv preferred)
 - Windows : [Anaconda Python Distribution(64-bit)](https://www.anaconda.com/products/individual)
+
+Installation is preferably done in a virtual environment
 
 ## Installation
 
@@ -27,6 +28,7 @@ $ git clone https://github.com/mfreer/SPIFpy.git
 $ cd /path/to/spifpy
 $ pip install .
 ```
+For those who are actively developing NRC-SPIFpy, you can change the last line to ```pip install --editable .```. 
 
 ### Windows
 
@@ -40,25 +42,25 @@ $ pip install .
 <a name="usage"></a>
 ## Example usage with 2DS imaging probe (SPEC Inc.)
 
-1. Copy over required configuration files using `spifcc`, and make any desired modifications to the config files. In this
+1. Copy over required configuration files using `nrc-spifpy-cc`, and make any desired modifications to the config files. In this
 case, the config files will include `2DS.ini` which defines config options for extracting and storing 2DS data, and
 also `aux_config.ini`, which specifies configuration options for adding auxiliary data.
 
 ```
-$ spifcc 2DS
+$ nrc-spifpy-cc 2DS
 ```
 
-1. Process the file of interest using `spifpy`
+1. Process the file of interest using `nrc-spifpy-extract`
 
 ```
-$ spifpy example_file.2DS 2DS.ini 
+$ nrc-spifpy-extract example_file.2DS 2DS.ini 
 ```
 
 3. Add auxiliary information to the **SPIF** file using `spifaddaux`(optional), but only for the
 `2DS-V` dataset.
 
 ```
-$ spifaddaux example_file_2DS.nc auxiliary_file.nc -i 2DS-V -c aux_config.ini 
+$ nrc-spifpy-addaux example_file_2DS.nc auxiliary_file.nc -i 2DS-V -c aux_config.ini 
 ```
 
 <a name="supported-probes"></a>
