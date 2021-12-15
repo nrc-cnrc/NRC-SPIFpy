@@ -77,8 +77,8 @@ Currently the following Optical Array Probes (OAP) are supported:
 
 <a name="citation"></a>
 ### Citations  
-<i>Bala, K., Freer, M., Bliankinshtein, N., Nichman, L., Shilin, S. and Wolde, M.: Standardized Imaging Probe Format and Algorithms: Implementation and Applications, 18th International Conference on Clouds and Precipitation (ICCP), Pune, India, 2-6 August, 2021.</i>
-<i>Single Particle Image Format (SPIF) conversion utility, https://doi.org/10.4224/40002712, 2021</i>
+- <i>Bala, K., Freer, M., Bliankinshtein, N., Nichman, L., Shilin, S. and Wolde, M.: Standardized Imaging Probe Format and Algorithms: Implementation and Applications, 18th International Conference on Clouds and Precipitation (ICCP), Pune, India, 2-6 August, 2021.</i>
+- <i>Single Particle Image Format (SPIF) conversion utility, https://doi.org/10.4224/40002712, 2021</i>
 
 <a name="acknowledgment"></a>
 ### Acknowledgments
