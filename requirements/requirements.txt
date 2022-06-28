@@ -1,6 +1,8 @@
 numpy
 netCDF4>=1.5.7
+xarray
 tdqm
 numba
 joblib
 scipy
+click
