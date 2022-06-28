@@ -34,10 +34,14 @@ from nrc_spifpy.spif import SPIFFile
         path_type=pl.Path,  # Pre-emptively convert to a pl.Path object
     ),
 )
-@click.argument("start", type=click.DateTime(formats=["%Y-%m-%dT%H:%M:%S"]))
-@click.argument("end", type=click.DateTime(formats=["%Y-%m-%dT%H:%M:%S"]))
+@click.argument("start", metavar='START', type=click.DateTime(formats=["%Y-%m-%dT%H:%M:%S"]))
+@click.argument("end", metavar='END', type=click.DateTime(formats=["%Y-%m-%dT%H:%M:%S"]))
 def cut(filename, config_file, start, end):
-
+    """
+        Cut a spif file from start-time to end-time. 
+        Both times are in format of %Y-%m-%dT%H:%M:%S
+    """
+    
     # Args checker 
 
     # Args transformer
