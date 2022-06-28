@@ -62,6 +62,7 @@ setup(
         nrc-spifpy-extract=nrc_spifpy.scripts.extract:extract
         nrc-spifpy-addaux=nrc_spifpy.scripts.addaux:addaux
         nrc-spifpy-cc=nrc_spifpy.scripts.copyconf:copyconf
+        nrc-spifpy-cut=nrc_spifpy.scripts.cut:cut
     ''',
     python_requires=">=3.6.0",
 )
