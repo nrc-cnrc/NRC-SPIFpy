@@ -34,12 +34,12 @@ from nrc_spifpy.spif import SPIFFile
         path_type=pl.Path,  # Pre-emptively convert to a pl.Path object
     ),
 )
-@click.argument("start", metavar='START', type=click.DateTime(formats=["%Y-%m-%dT%H:%M:%S"]))
-@click.argument("end", metavar='END', type=click.DateTime(formats=["%Y-%m-%dT%H:%M:%S"]))
+@click.argument("start", metavar='START', type=click.DateTime(formats=["%Y-%m-%dT%H:%M:%S.%f"]))
+@click.argument("end", metavar='END', type=click.DateTime(formats=["%Y-%m-%dT%H:%M:%S.%f"]))
 def cut(filename, config_file, start, end):
     """
         Cut a spif file from start-time to end-time. 
-        Both times are in format of %Y-%m-%dT%H:%M:%S
+        Both times are in format of %Y-%m-%dT%H:%M:%S.%f
     """
     
     # Args checker 
@@ -132,13 +132,22 @@ class SPIFCutDatasetGenerator:
     def slice_group(self, group):
         data = xr.open_dataset(self.filename, group = f"{group}/core", decode_cf = False)
 
-        # datetime to seconds since start date
-        imgsec_start = int((self.start-self.file_start_date).total_seconds())
-        imgsec_end = int((self.end-self.file_start_date).total_seconds())
+        # datetime to seconds since start date	
+        start_diff = (self.start-self.file_start_date).total_seconds()
+        end_diff = (self.end-self.file_start_date).total_seconds()
+
+        ns_start = (start_diff%1)*10e8 
+        ns_end = (end_diff%1)*10e8
 
         # image start and end indices
-        image_start = np.searchsorted(data['image_sec'].values, imgsec_start, side='left')-1
-        image_end = np.searchsorted(data['image_sec'].values, imgsec_end, side='right')
+        sec_start_arg = np.searchsorted(data['image_sec'].values, start_diff, side='left')-1
+        sec_end_arg = np.searchsorted(data['image_sec'].values, end_diff, side='right')
+
+        image_start = np.searchsorted(data['image_ns'][sec_start_arg:sec_end_arg].values, ns_start, side='left')-1
+        image_end = np.searchsorted(data['image_ns'][sec_start_arg:sec_end_arg].values, ns_end, side='right')
+        
+        image_start += sec_start_arg
+        image_end += sec_start_arg
 
         # pixel start and end indices
         pixel_start = int(np.sum(data['image_len'].values[0:image_start])*128)
