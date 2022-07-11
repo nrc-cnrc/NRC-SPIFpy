@@ -8,6 +8,7 @@ from copy import deepcopy
 import click
 
 import numpy as np
+import math
 
 import netCDF4 as nc
 import xarray as xr
@@ -131,23 +132,23 @@ class SPIFCutDatasetGenerator:
 
     def slice_group(self, group):
         data = xr.open_dataset(self.filename, group = f"{group}/core", decode_cf = False)
-
+        
         # datetime to seconds since start date	
         start_diff = (self.start-self.file_start_date).total_seconds()
         end_diff = (self.end-self.file_start_date).total_seconds()
-
+        
         ns_start = (start_diff%1)*10e8 
         ns_end = (end_diff%1)*10e8
 
         # image start and end indices
-        sec_start_arg = np.searchsorted(data['image_sec'].values, start_diff, side='left')-1
-        sec_end_arg = np.searchsorted(data['image_sec'].values, end_diff, side='right')
+        sec_start_args = np.searchsorted(data['image_sec'].values, math.floor(start_diff), side='left'), np.searchsorted(data['image_sec'].values, math.floor(start_diff), side='right')-1
+        sec_end_args = np.searchsorted(data['image_sec'].values, math.ceil(end_diff), side='left'), np.searchsorted(data['image_sec'].values, math.ceil(end_diff), side='right')-1
 
-        image_start = np.searchsorted(data['image_ns'][sec_start_arg:sec_end_arg].values, ns_start, side='left')-1
-        image_end = np.searchsorted(data['image_ns'][sec_start_arg:sec_end_arg].values, ns_end, side='right')
+        image_start = np.searchsorted(data['image_ns'][sec_start_args[0]:sec_start_args[1]].values, ns_start, side='left')-1	
+        image_end = np.searchsorted(data['image_ns'][sec_end_args[0]:sec_end_args[1]].values, ns_end, side='right')
         
-        image_start += sec_start_arg
-        image_end += sec_start_arg
+        image_start += sec_start_args[0]
+        image_end += sec_end_args[0]
 
         # pixel start and end indices
         pixel_start = int(np.sum(data['image_len'].values[0:image_start])*128)
