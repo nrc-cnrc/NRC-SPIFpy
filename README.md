@@ -24,7 +24,7 @@ Installation is preferably done in a virtual environment
 
 ### Linux/MacOS
 ```
-$ git@github.com:nrc-cnrc/NRC-SPIFpy.git
+$ git clone git@github.com:nrc-cnrc/NRC-SPIFpy.git
 $ cd /path/to/spifpy
 $ pip install .
 ```
