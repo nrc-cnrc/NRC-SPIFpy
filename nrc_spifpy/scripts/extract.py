@@ -10,8 +10,10 @@ import pathlib as pl
 
 import datetime as dt
 
+from nrc_spifpy.scripts.addaux import addaux
 from nrc_spifpy.input import DMTMonoFile
 from nrc_spifpy.input import DMTGreyFile
+from nrc_spifpy.input import DMTGreyMonoFile
 from nrc_spifpy.input import SPECFile
 from nrc_spifpy.input import TwoDFile
 from nrc_spifpy.spif import SPIFCore
@@ -65,13 +67,13 @@ def get_parser():
     return parser
 
 def call_spifcore(transformed_args):
-     inst_name = get_inst_name(transformed_args)
+     inst_name, inst_class = get_inst_name(transformed_args)
      filename = transformed_args['filename']
      outfile = transformed_args['output']
      config = transformed_args['config']
 
      spif_core = SPIFCore(
-          inst_dict[inst_name],
+          inst_class,
           filename,
           outfile,
           config
@@ -84,8 +86,11 @@ def get_inst_name(transformed_args):
 
      config.read(transformed_args['config'])
      inst_name = config['instrument'].get('instrument_name', None)
+     inst_class = inst_dict[inst_name]
+     if config['instrument'].getboolean('mono_as_grey', False):
+          inst_class = DMTGreyMonoFile
 
-     return inst_name
+     return inst_name, inst_class
 
 class ArgsChecker:
      def __init__(self, args):

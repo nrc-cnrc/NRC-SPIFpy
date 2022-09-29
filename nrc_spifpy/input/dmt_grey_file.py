@@ -26,6 +26,8 @@ class DMTGreyFile(DMTBinaryFile):
         Filename of current file.
     inst_name : str
         Name of current instrument, e.g., CIP, PIP.
+    resolution : int
+        Resolution in microns of probe
     """
     syncword = numpy.array([3] * 128)
 
@@ -91,7 +93,7 @@ class DMTGreyFile(DMTBinaryFile):
 
         return self.extract_images(frame, frame_decomp, date)
 
-    def extract_images(self, frame, frame_decomp, date):
+    def extract_images(self, frame, frame_decomp, date, mono=False):
         """ Extracts images and associated info from decompressed image
         buffer. The image image, length, timestamp in sec and ns, image
         count, dof flag, and buffer index are extracted for each image.
@@ -140,6 +142,9 @@ class DMTGreyFile(DMTBinaryFile):
             image_count = bin_to_int(header_bin[64:80])
             tas = bin_to_int(header_bin[56:64])
             image = frame_decomp[ii + 64: ii + 64 + (slice_count * 64)]
+            if mono:
+                for i, val in enumerate(image):
+                    image[i] -= 2
             ii = ii + 64 + ((slice_count - 1) * 64)
             if ii < len(frame_decomp) - 128:
                 ii = self.search_syncword(frame_decomp, ii)
