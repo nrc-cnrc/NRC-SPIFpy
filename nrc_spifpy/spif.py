@@ -197,14 +197,16 @@ class SPIFFile(object):
 
         self.rootgrp.setncatts(self.root_attrs)
 
-    def create_inst_group(self, inst_name):
+    def create_inst_group(self, inst_name, resolution=None):
         """ Given desired instrument name, creates instrument group and
         associated attributes and variables in NetCDF file.
-
         Parameters
         ----------
         inst_name : str
             Short name of instrument to use for group name in NetCDF file.
+        resolution : int, optional
+            Custom resolution to be used in case of HVPS4 where separate instrument
+            groups are needed.
         """
         instgrp = self.rootgrp.createGroup(inst_name)
         self.instgrps[inst_name] = instgrp
@@ -216,6 +218,8 @@ class SPIFFile(object):
         instgrp.createDimension('Images', None)
         instgrp.createDimension('Buffers', None)
         instgrp.createDimension('Pixels', None)
+        # instgrp.createDimension('Array', n_pixels)
+        # instgrp.createDimension('Slices', None)
 
         instgrp.setncatts(self.attrs['instrument'])
         for var, var_type in self.inst_scalars.items():
@@ -223,6 +227,8 @@ class SPIFFile(object):
                 value = self.attrs[var]['value']
                 if var == 'antishatter_tips':
                     value = bool(value)
+                if var == 'resolution' and resolution is not None:
+                    value = resolution
                 attrs = dict(self.attrs[var].items())
                 attrs.pop('value')
                 self.create_variable(instgrp,

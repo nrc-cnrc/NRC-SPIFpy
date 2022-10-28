@@ -24,7 +24,8 @@ inst_dict = {'2DC': TwoDFile,
              'CIPGS': DMTGreyFile,
              'PIP': DMTMonoFile,
              '2DS': SPECFile,
-             'HVPS': SPECFile}
+             'HVPS': SPECFile,
+             'HVPS4': SPECFile}
 
 def extract():
 

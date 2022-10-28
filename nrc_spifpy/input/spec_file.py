@@ -751,12 +751,19 @@ class FrameInfo(object):
                 tas.append(numpy.array([data[indx + 76],
                                         data[indx + 75]],
                                        dtype='u2').view('float32')[0])
-
+        #breakpoint()
         datetimes = numpy.array(self.datetimes).astype('datetime64[us]')
         hk_datetimes = numpy.array(hk_datetimes).astype('datetime64[us]')
         for i, record_time in enumerate(datetimes):
+
             best_indx = numpy.where(hk_datetimes > record_time)[0]
-            self.tas[i] = tas[best_indx[0]]
+
+            # If there is no best index, just use the last best tas
+
+            if best_indx.__len__() > 0:
+                self.tas[i] = tas[best_indx[0]]
+            else:
+                self.tas[i] = self.tas[i - 1]
 
     def add_counts(self, frame, chunksize, counts):
         try:
