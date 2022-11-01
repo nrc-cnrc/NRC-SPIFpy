@@ -67,7 +67,7 @@ class SPECFile(BinaryFile):
                                             d['ms'] * 1000) for d in self.data]
         self.datetimes = numpy.array(self.datetimes)
 
-    def process_file(self, spiffile, processors=None):
+    def process_file(self, spiffile, processors=None, start=0, end=None):
         """ Method to process file using multiple processors. Calls
         process_image method implemented in children classes. Passes image
         data to spiffile object to be written to file each time 10,000 or more
@@ -91,9 +91,12 @@ class SPECFile(BinaryFile):
 
         spiffile.set_start_date(self.start_date.strftime('%Y-%m-%d %H:%M:%S %z'))
 
-        process_until = len(self.data)
+        if end is None:
+            process_until = len(self.data)
+        else:
+            process_until = end - 1
 
-        data_chunk = range(0, process_until)
+        data_chunk = range(start, process_until)
         tot_h_images = 0
         tot_v_images = 0
 
@@ -148,7 +151,7 @@ class SPECFile(BinaryFile):
                     futures.append(executor.submit(self.process_frames,
                                                    data_chunk[i: i + chunksize]))
                     i += chunksize
-                    if i >= process_until:
+                    if i >= process_until - start:
                         images_remaining = False
                     pbar1.update(chunksize)
 
@@ -157,7 +160,7 @@ class SPECFile(BinaryFile):
                     indx = futures.index(f)
                     if indx == 0:
                         pbar2.update(chunksize)
-                        h_images, v_images, h150_images, v150_images, frame = f.result()
+                        h_images, v_images, h150_images, v150_images, frames = f.result()
                         tot_h_images += len(h_images)
                         tot_v_images += len(v_images)
                         t0 = time.time()
@@ -311,7 +314,7 @@ class SPECFile(BinaryFile):
                 h150_p.extend(img_dict['h150_images'])
                 v150_p.extend(img_dict['v150_images'])
 
-        return h_p, v_p, h150_p, v150_p, frames[0]
+        return h_p, v_p, h150_p, v150_p, frames
 
     def process_frame(self, frame, img_dict, prev_counts):
         """ Method to process single frame of image data. Decompresses image
@@ -376,11 +379,6 @@ class SPECFile(BinaryFile):
         # resolution = self.resolution * 1e-6  # 10µm in meters
         resolution = self.resolution
 
-        prev_h_image_time = record_time
-        prev_v_image_time = record_time
-
-        h_count_list = []
-
         while i < len(record) - 53:
             if tas > 0.1:
                 tick_length = resolution / tas
@@ -393,11 +391,10 @@ class SPECFile(BinaryFile):
                 image_count = record[i + 3]
                 num_slices = record[i + 4]
                 i += 5
-                # print(h['n'], v['n'], image_count)
                 if (h['mismatch'] == 1) or (v['mismatch'] == 1):
                     i += h['n'] + v['n']
                 else:
-                    if h['n'] > 2:
+                    if h['n'] > 0:
                         h_decomp, h_count = self.process_image(record, i, h, True)
 
                         # Store dummy time for now since we will recompute
@@ -435,7 +432,7 @@ class SPECFile(BinaryFile):
                                                                       h_count)
                             prev_counts['h'] = h_count
 
-                    if v['n'] > 2:
+                    if v['n'] > 0:
                         v_decomp, v_count = self.process_image(record, i, v)
 
                         # Store dummy time for now since we will recompute
@@ -471,7 +468,6 @@ class SPECFile(BinaryFile):
                                                                       frame,
                                                                       tas,
                                                                       v_count)
-                            h_count_list.append(v_count)
                             prev_counts['v'] = v_count
 
                     i += h['n'] + v['n']
@@ -583,6 +579,9 @@ class SPECFile(BinaryFile):
             p_raw = p_raw[:-2]
         else:
             p_counter = 0
+
+        if p['overload'] == 1:
+            p_raw = p_raw[:-2]
 
         p_decomp = self.decompress_image(p_raw)
 
@@ -739,6 +738,8 @@ class FrameInfo(object):
             hk_datetimes = []
 
             for indx in possible_hk_index:
+                if data[indx - 8] > 2050 or data[indx - 8] < 1980:
+                    continue
                 record_time = datetime.datetime(data[indx - 8],
                                                 data[indx - 7],
                                                 data[indx - 5],
@@ -751,26 +752,14 @@ class FrameInfo(object):
                 tas.append(numpy.array([data[indx + 76],
                                         data[indx + 75]],
                                        dtype='u2').view('float32')[0])
-        #breakpoint()
+
         datetimes = numpy.array(self.datetimes).astype('datetime64[us]')
         hk_datetimes = numpy.array(hk_datetimes).astype('datetime64[us]')
         for i, record_time in enumerate(datetimes):
-
             best_indx = numpy.where(hk_datetimes > record_time)[0]
+            # print(best_indx[0], len(self.tas), len(tas), i, len(datetimes))
+            self.tas[i] = tas[best_indx[0]]
 
-            # If there is no best index, just use the last best tas
-
-            if best_indx.__len__() > 0:
-                self.tas[i] = tas[best_indx[0]]
-            else:
-                self.tas[i] = self.tas[i - 1]
-
-    def add_counts(self, frame, chunksize, counts):
-        try:
-            for i in range(chunksize):
-                self.raw_counts[i + frame] = counts[i]
-        except IndexError:
-            pass
 
 class SpecHKFile(object):
 
