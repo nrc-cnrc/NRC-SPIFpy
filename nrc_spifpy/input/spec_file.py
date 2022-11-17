@@ -197,10 +197,8 @@ class SPECFile(BinaryFile):
 
             buffer_time = datetimes[buffer_indx]
 
-            delta_count = numpy.diff(counts)
-            delta_buffer = numpy.diff(buffer_time)
-
-            tas = tas[:-1]
+            delta_count = numpy.diff(counts, prepend=counts[0])
+            delta_buffer = numpy.diff(buffer_time, prepend=buffer_time[0])
 
             rollover = numpy.where((delta_count < 0) | (delta_buffer > 200))[0]
 
@@ -214,7 +212,7 @@ class SPECFile(BinaryFile):
             elapsed_time = numpy.zeros(len(newtime))
 
             if len(rollover) > 0:
-                rollover = numpy.insert(rollover, -1, len(newtime))
+                rollover = numpy.append(rollover, [len(newtime)])
             else:
                 rollover = [len(newtime)]
 
@@ -758,7 +756,12 @@ class FrameInfo(object):
         for i, record_time in enumerate(datetimes):
             best_indx = numpy.where(hk_datetimes > record_time)[0]
             # print(best_indx[0], len(self.tas), len(tas), i, len(datetimes))
-            self.tas[i] = tas[best_indx[0]]
+            if len(best_indx) > 0:
+                self.tas[i] = tas[best_indx[0]]
+            elif i > 0:
+                self.tas[i] = self.tas[i - 1]
+            else:
+                self.tas[i] = 0
 
 
 class SpecHKFile(object):
