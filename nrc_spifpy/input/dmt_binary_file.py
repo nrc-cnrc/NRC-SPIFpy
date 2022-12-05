@@ -10,9 +10,9 @@ import time
 
 from tqdm import tqdm
 
-from nrc_spifpy.input.binary_file import BinaryFile
-from nrc_spifpy.input.input_utils import read_sea_image_data
-from nrc_spifpy.images import Images
+from . import BinaryFile
+from .input_utils import read_sea_image_data
+from ..images import Images
 
 MAX_PROCESSORS = 20
 
@@ -41,7 +41,7 @@ class DMTBinaryFile(BinaryFile):
         self.get_start_date()
         self.calc_buffer_datetimes()
 
-    def process_file(self, spiffile, processors=None):
+    def process_file(self, spiffile, processors=None, start=0, end=None):
         """ Method to process file using multiple processors. Calls
         process_image method implemented in children classes. Passes image
         data to spiffile object to be written to file.
@@ -65,8 +65,12 @@ class DMTBinaryFile(BinaryFile):
 
         spiffile.set_start_date(self.start_date.strftime('%Y-%m-%d %H:%M:%S %z'))
 
-        process_until = len(self.data)
-        data_chunk = range(0, process_until)
+        if end is None:
+            process_until = len(self.data)
+        else:
+            process_until = end - 1
+
+        data_chunk = range(start, process_until)
 
         tot_images = 0
 
@@ -141,4 +145,3 @@ class DMTBinaryFile(BinaryFile):
                                             d['minute'],
                                             d['second'],
                                             d['ms'] * 1000) for d in self.data]
-
