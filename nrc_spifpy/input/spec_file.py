@@ -10,7 +10,6 @@ import gc
 import math
 import os
 import time
-import uuid
 
 import numpy
 from tqdm import tqdm
@@ -25,10 +24,12 @@ class SPECFile(BinaryFile):
     """ Class representing monoscale binary format for SPEC instruments.
     Implements methods specific to decompressing and processing images from
     this type of binary file.
+
     Class Attributes
     ----------------
     syncword : numpy array
         Numpy array of syncword used in DMT monoscale format.
+
     Parameters
     ----------
     filename : str
@@ -72,6 +73,7 @@ class SPECFile(BinaryFile):
         process_image method implemented in children classes. Passes image
         data to spiffile object to be written to file each time 10,000 or more
         images are extracted from file.
+
         Parameters
         ----------
         spiffile : SPIFFile object
@@ -144,6 +146,7 @@ class SPECFile(BinaryFile):
         max_write_queue = 8
         images_remaining = True
         futures = []
+
         # self.last_clocks = numpy.zeros(4)
         with ProcessPoolExecutor(max_workers=processors) as executor:
             while True:
@@ -165,6 +168,7 @@ class SPECFile(BinaryFile):
                         tot_v_images += len(v_images)
                         t0 = time.time()
                         self.partial_write(spiffile, h_images, v_images, h150_images, v150_images)
+
                         # print(f'Frame {frame} images '
                         #       f'written in {time.time() - t0:0.3f} seconds')
                         futures.pop(indx)
@@ -192,7 +196,10 @@ class SPECFile(BinaryFile):
 
         for i, img_group in enumerate(img_groups):
             buffer_indx = spiffile.instgrps[img_group]['core']['buffer_index'][:]
-            tas = spiffile.instgrps[img_group]['core']['tas'][:]
+            try:
+                tas = spiffile.instgrps[img_group]['core']['tas'][:]
+            except IndexError:
+                continue
             counts = spiffile.instgrps[img_group]['core']['clock_counts'][:]
 
             buffer_time = datetimes[buffer_indx]
@@ -202,7 +209,10 @@ class SPECFile(BinaryFile):
 
             rollover = numpy.where((delta_count < 0) | (delta_buffer > 200))[0]
 
-            delta_count[delta_count < 0] += 2 ** 32
+            if self.name == 'HVPS4':
+                delta_count[delta_count < 0] += 2 ** 48
+            else:
+                delta_count[delta_count < 0] += 2 ** 32
 
             delta_time = delta_count * self.resolution / tas * 1e-6
 
@@ -238,6 +248,7 @@ class SPECFile(BinaryFile):
     def partial_write(self, spiffile, h_p, v_p, h_p150=None, v_p150=None):
         """ Called each time number of unsaved processed images exceeds
         10,000. Writes H and V images to SPIF NetCDF file.
+
         Parameters
         ----------
         spiffile : SPIFFile object
@@ -318,10 +329,12 @@ class SPECFile(BinaryFile):
         """ Method to process single frame of image data. Decompresses image
         data from frame and passes resulting image data to process_image
         method to extract image info from image buffer.
+
         Parameters
         ----------
         frame : int
             Frame number in self.data to process.
+
         Returns
         -------
         Images object
@@ -370,14 +383,16 @@ class SPECFile(BinaryFile):
 
         if self.name == 'HVPS4':
             hk_length = 83
+            is_hvps4 = True
         else:
             hk_length = 53
+            is_hvps4 = False
         tas = self.hk_data.tas[frame]
 
         # resolution = self.resolution * 1e-6  # 10µm in meters
         resolution = self.resolution
 
-        while i < len(record) - 53:
+        while i < len(record) - 6:
             if tas > 0.1:
                 tick_length = resolution / tas
             else:
@@ -389,11 +404,12 @@ class SPECFile(BinaryFile):
                 image_count = record[i + 3]
                 num_slices = record[i + 4]
                 i += 5
-                if (h['mismatch'] == 1) or (v['mismatch'] == 1):
+                if (h['mismatch'] == 10) or (v['mismatch'] == 10):
+                    print('mismatch')
                     i += h['n'] + v['n']
                 else:
                     if h['n'] > 0:
-                        h_decomp, h_count = self.process_image(record, i, h, True)
+                        h_decomp, h_count = self.process_image(record, i, h, is_hvps4)
 
                         # Store dummy time for now since we will recompute
                         # following batch processing
@@ -431,7 +447,7 @@ class SPECFile(BinaryFile):
                             prev_counts['h'] = h_count
 
                     if v['n'] > 0:
-                        v_decomp, v_count = self.process_image(record, i, v)
+                        v_decomp, v_count = self.process_image(record, i, v, is_hvps4)
 
                         # Store dummy time for now since we will recompute
                         # following batch processing
@@ -456,7 +472,6 @@ class SPECFile(BinaryFile):
                         else:
                             if v_count == 0:
                                 v_count = prev_counts['v']
-
                             v_img, v_len, v_images = self.store_image(v,
                                                                       v_img,
                                                                       v_decomp,
@@ -472,12 +487,15 @@ class SPECFile(BinaryFile):
             elif record[i] == 19787:  # equals 'MK'
                 i += 23
             elif record[i] == 18507:  # equals 'HK'
-                read_tas = numpy.array([record[i + 50], record[i + 49]],
-                                       dtype='u2').view('float32')[0]
-                tas_dec = read_tas % 1
-                if read_tas < 1000 and read_tas > 0.1 and tas_dec == 0:
-                    tas = read_tas
-                i += hk_length
+                if i + 50 < len(record):
+                    read_tas = numpy.array([record[i + 50], record[i + 49]],
+                                           dtype='u2').view('float32')[0]
+                    tas_dec = read_tas % 1
+                    if read_tas < 1000 and read_tas > 0.1 and tas_dec == 0:
+                        tas = read_tas
+                    i += hk_length
+                else:
+                    i += 1
             elif record[i] == 20044:  # equals 'NL'
                 break
             else:
@@ -507,30 +525,16 @@ class SPECFile(BinaryFile):
                     'h150_img': h150_img,
                     }
 
-
         return img_dict, prev_counts
-
-    def recalc_timestamps(self, record_time, imgs):
-        tot_elapsed = numpy.nansum(imgs.dt)
-        timestamp = []
-        cum_time = 0
-        for i, dt in enumerate(imgs.dt):
-            try:
-                delta_time = datetime.timedelta(microseconds=tot_elapsed - cum_time)
-            except:
-                print(tot_elapsed, cum_time, imgs.dt)
-            time = record_time - delta_time
-            epoch_time = math.modf((time - self.start_date).total_seconds())
-            imgs.sec[i] = epoch_time[1]
-            imgs.ns[i] = epoch_time[0] * 1e9
-            cum_time += dt
 
     def decode_flags(self, record):
         """ Decode flags for given 16 bit record.
+
         Parameters
         ----------
         record : int
             16 bit record to extract flags from.
+
         Returns
         -------
         dict
@@ -552,8 +556,9 @@ class SPECFile(BinaryFile):
 
         return flags
 
-    def process_image(self, record, i, p, h=False):
+    def process_image(self, record, i, p, hvps4=False):
         """ Extracts image from record.
+
         Parameters
         ----------
         record : array
@@ -562,6 +567,7 @@ class SPECFile(BinaryFile):
             Current position in record array for processing.
         p : dict
             flags dict for current image
+
         Returns
         -------
         array
@@ -569,19 +575,25 @@ class SPECFile(BinaryFile):
         int
             Value of counter, if present. If not present, 0 is returned.
         """
+        min_length = 2
+        if hvps4:
+            min_length += 1
+
         p_raw = record[i: i + p['n']]
-        if p['timing'] == 0 and len(p_raw) > 2 and len(record) > i + p['n']:
-            p_counter = (p_raw[-2] << 16) | p_raw[-1]
-            # if h:
-            #     print(p_raw[-2], p_raw[-1], p_counter, i, record[i-4])
-            p_raw = p_raw[:-2]
+        if p['timing'] == 0 and len(p_raw) > min_length and len(record) >= i + p['n']:
+            if hvps4:
+                p_counter = (p_raw[-1] << 32) | (p_raw[-2] << 16) | p_raw[-3]
+                p_raw = p_raw[:-3]
+            else:
+                p_counter = (p_raw[-2] << 16) | p_raw[-1]
+                p_raw = p_raw[:-2]
         else:
             p_counter = 0
 
         if p['overload'] == 1:
             p_raw = p_raw[:-2]
 
-        p_decomp = self.decompress_image(p_raw)
+        p_decomp = self.decompress_image(p_raw, hvps4)
 
         return p_decomp, p_counter
 
@@ -589,6 +601,7 @@ class SPECFile(BinaryFile):
         """ If timeword present in current image, stores extracted image
         info in Images data object. Otherwise, concatenates current image
         data to existing image data.
+
         Parameters
         ----------
         p : dict
@@ -607,6 +620,7 @@ class SPECFile(BinaryFile):
             Buffer frame number currently being processed.
         tas : float
             True airspeed of current image.
+
         Returns
         -------
         array
@@ -640,12 +654,16 @@ class SPECFile(BinaryFile):
 
         return p_img, p_len, images
 
-    def decompress_image(self, img):
+    def decompress_image(self, img, hvps4):
         """ Decompresses image image.
+
         Parameters
         ----------
         img : array
             Compressed image data.
+        hvps4 : bool
+            True if probe is HVPS4
+
         Returns
         -------
         array
@@ -653,30 +671,49 @@ class SPECFile(BinaryFile):
         """
         img_decomp = []
         slice_decomp = []
+        startslice = 0
+        non_compressed = 0
         for line in img:
-            if line == 32767:  # special case of 0x7fff
-                img_decomp.extend([0] * 128)
+            if non_compressed > 0:
+                bin_line = [-1 * (int(n) - 1) for n in bin(line)[2:].zfill(16)[::-1]]
+                slice_decomp.extend(bin_line)
+                non_compressed -= 1
+                if non_compressed == 0:
+                    img_decomp, slice_decomp = self.add_img_slice(img_decomp, slice_decomp)
+            elif line == 32767:  # special case of 0x7fff
+                img_decomp, slice_decomp = self.add_img_slice(img_decomp, slice_decomp)
+                startslice = 0
+                if hvps4:
+                    non_compressed += 8
+                else:
+                    img_decomp.extend([0] * 128)
             elif line == 16384:  # special case of 0x4000
+                img_decomp, slice_decomp = self.add_img_slice(img_decomp, slice_decomp)
                 img_decomp.extend([1] * 128)
+                startslice = 0
             else:
                 timeslice = (line & (2 ** 15)) >> 15
                 startslice = (line & (2 ** 14)) >> 14
                 num_shaded = (line & 16256) >> 7
                 num_clear = (line & 127)
-                #print(line, timeslice, startslice, num_clear, num_shaded)
                 if timeslice == 0:
                     if startslice == 1:
-                        if len(slice_decomp) % 128 > 0:
-                            slice_decomp.extend([0] * (128 - (len(slice_decomp) % 128)))
-                        img_decomp.extend(slice_decomp)
-                        slice_decomp = []
-
-                    # if num_clear + num_shaded < 128:
+                        img_decomp, slice_decomp = self.add_img_slice(img_decomp, slice_decomp)
                     slice_decomp.extend([0] * num_clear)
                     slice_decomp.extend([1] * num_shaded)
 
+        if len(slice_decomp) > 0 and timeslice == 0:
+            img_decomp, slice_decomp = self.add_img_slice(img_decomp, slice_decomp)
         img = numpy.logical_not(numpy.array(img_decomp))
         return img
+
+    def add_img_slice(self, img_decomp, slice_decomp):
+        if len(slice_decomp) % 128 > 0:
+            slice_decomp.extend([0] * (128 - (len(slice_decomp) % 128)))
+        img_decomp.extend(slice_decomp)
+        slice_decomp = []
+
+        return img_decomp, slice_decomp
 
 
 class FrameInfo(object):
