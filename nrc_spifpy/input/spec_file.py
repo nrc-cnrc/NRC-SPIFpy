@@ -24,12 +24,10 @@ class SPECFile(BinaryFile):
     """ Class representing monoscale binary format for SPEC instruments.
     Implements methods specific to decompressing and processing images from
     this type of binary file.
-
     Class Attributes
     ----------------
     syncword : numpy array
         Numpy array of syncword used in DMT monoscale format.
-
     Parameters
     ----------
     filename : str
@@ -73,7 +71,6 @@ class SPECFile(BinaryFile):
         process_image method implemented in children classes. Passes image
         data to spiffile object to be written to file each time 10,000 or more
         images are extracted from file.
-
         Parameters
         ----------
         spiffile : SPIFFile object
@@ -248,7 +245,6 @@ class SPECFile(BinaryFile):
     def partial_write(self, spiffile, h_p, v_p, h_p150=None, v_p150=None):
         """ Called each time number of unsaved processed images exceeds
         10,000. Writes H and V images to SPIF NetCDF file.
-
         Parameters
         ----------
         spiffile : SPIFFile object
@@ -329,12 +325,10 @@ class SPECFile(BinaryFile):
         """ Method to process single frame of image data. Decompresses image
         data from frame and passes resulting image data to process_image
         method to extract image info from image buffer.
-
         Parameters
         ----------
         frame : int
             Frame number in self.data to process.
-
         Returns
         -------
         Images object
@@ -529,12 +523,10 @@ class SPECFile(BinaryFile):
 
     def decode_flags(self, record):
         """ Decode flags for given 16 bit record.
-
         Parameters
         ----------
         record : int
             16 bit record to extract flags from.
-
         Returns
         -------
         dict
@@ -558,7 +550,6 @@ class SPECFile(BinaryFile):
 
     def process_image(self, record, i, p, hvps4=False):
         """ Extracts image from record.
-
         Parameters
         ----------
         record : array
@@ -567,7 +558,6 @@ class SPECFile(BinaryFile):
             Current position in record array for processing.
         p : dict
             flags dict for current image
-
         Returns
         -------
         array
@@ -601,7 +591,6 @@ class SPECFile(BinaryFile):
         """ If timeword present in current image, stores extracted image
         info in Images data object. Otherwise, concatenates current image
         data to existing image data.
-
         Parameters
         ----------
         p : dict
@@ -620,7 +609,6 @@ class SPECFile(BinaryFile):
             Buffer frame number currently being processed.
         tas : float
             True airspeed of current image.
-
         Returns
         -------
         array
@@ -656,14 +644,12 @@ class SPECFile(BinaryFile):
 
     def decompress_image(self, img, hvps4):
         """ Decompresses image image.
-
         Parameters
         ----------
         img : array
             Compressed image data.
         hvps4 : bool
             True if probe is HVPS4
-
         Returns
         -------
         array
@@ -672,6 +658,7 @@ class SPECFile(BinaryFile):
         img_decomp = []
         slice_decomp = []
         startslice = 0
+        timeslice = 0
         non_compressed = 0
         for line in img:
             if non_compressed > 0:
