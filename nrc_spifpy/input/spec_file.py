@@ -14,12 +14,11 @@ import time
 import numpy
 from tqdm import tqdm
 
-from . import BinaryFile
-from .spec_utils import process_spec_aux
-from ..images import Images
+from nrc_spifpy.input.binary_file import BinaryFile
+from nrc_spifpy.input.spec_utils import process_spec_aux
+from nrc_spifpy.images import Images
 
 MAX_PROCESSORS = 20
-
 
 class SPECFile(BinaryFile):
     """ Class representing monoscale binary format for SPEC instruments.
@@ -737,7 +736,7 @@ class SPECFile(BinaryFile):
             p_counter = 0
 
         if p['overload'] == 1:
-            p_overload = (p_raw[-2] << 16) | p_raw[-1]
+            # p_overload = (p_raw[-2] << 16) | p_raw[-1]
             # print(p_overload, p_counter)
             p_raw = p_raw[:-2]
 

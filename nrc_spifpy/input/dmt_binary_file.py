@@ -41,7 +41,7 @@ class DMTBinaryFile(BinaryFile):
         self.get_start_date()
         self.calc_buffer_datetimes()
 
-    def process_file(self, spiffile, processors=None):
+    def process_file(self, spiffile, processors=None, start=0, end=None):
         """ Method to process file using multiple processors. Calls
         process_image method implemented in children classes. Passes image
         data to spiffile object to be written to file.
@@ -65,8 +65,12 @@ class DMTBinaryFile(BinaryFile):
 
         spiffile.set_start_date(self.start_date.strftime('%Y-%m-%d %H:%M:%S %z'))
 
-        process_until = len(self.data)
-        data_chunk = range(0, process_until)
+        if end is None:
+            process_until = len(self.data)
+        else:
+            process_until = end - 1
+
+        data_chunk = range(start, process_until)
 
         tot_images = 0
 
@@ -105,8 +109,9 @@ class DMTBinaryFile(BinaryFile):
                         images = f.result()
                         tot_images += len(images)
                         t0 = time.time()
-                        images.conv_to_array(self.diodes)
-                        spiffile.write_images(self.name, images)
+                        if len(images) > 0:
+                            images.conv_to_array(self.diodes)
+                            spiffile.write_images(self.name, images)
 
                         futures.pop(indx)
 
