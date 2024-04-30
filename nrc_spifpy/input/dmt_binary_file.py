@@ -109,8 +109,9 @@ class DMTBinaryFile(BinaryFile):
                         images = f.result()
                         tot_images += len(images)
                         t0 = time.time()
-                        images.conv_to_array(self.diodes)
-                        spiffile.write_images(self.name, images)
+                        if len(images) > 0:
+                            images.conv_to_array(self.diodes)
+                            spiffile.write_images(self.name, images)
 
                         futures.pop(indx)
 

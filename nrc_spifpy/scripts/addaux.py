@@ -333,7 +333,7 @@ def add_aux_to_spif(spif_filename, aux_file, inst_names, config_file, output_fil
 
         # Open aux file.
         aux_rootgrp = nc.Dataset(aux_file)
-        aux_time = aux_rootgrp['Time']
+        aux_time = aux_rootgrp['time']
 
         aux_rootgrp.set_auto_mask(False)
 
@@ -344,7 +344,7 @@ def add_aux_to_spif(spif_filename, aux_file, inst_names, config_file, output_fil
         # Create AuxTime dimension in SPIF file if it does not exist.
         if 'AuxTime' not in spif_auxgrp.dimensions:
             spif_auxgrp.createDimension(
-                'AuxTime', aux_rootgrp.dimensions['Time'].size)
+                'AuxTime', aux_rootgrp.dimensions['time'].size)
 
         # Write aux timestamps to SPIF file in aux group.
         write_aux_time(spif_auxgrp, aux_datetime, spif_startdate)
