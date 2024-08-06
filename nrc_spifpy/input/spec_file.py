@@ -369,7 +369,8 @@ class SPECFile(BinaryFile):
                     'h_rem': 0,
                     'v_rem': 0,
                     'last_h': None,
-                    'last_v': None
+                    'last_v': None,
+                    'record_start_idx': 0, # Yongjie, 2024-08-06.
                     }
 
         for frame in frames:
@@ -382,6 +383,356 @@ class SPECFile(BinaryFile):
 
         return h_p, v_p, h150_p, v150_p, frames
 
+
+    #---------------------------------------------------------------------
+    # Update the function 'process_frame' with a new method via adding 
+    #   next data block to obtain full data record if necessary.
+    # Yongjie Huang (OU, huangynj@gmail.com), 2024-08-06.
+    #
+    def process_frame(self, frame, img_dict, prev_counts):
+        """ Method to process single frame of image data. Decompresses image
+        data from frame and passes resulting image data to process_image
+        method to extract image info from image buffer.
+
+        Parameters
+        ----------
+        frame : int
+            Frame number in self.data to process.
+        img_dict : dict
+            Dictionary containing image and buffer information that
+            spans frames
+        prev_counts : dict
+            Dictionary containing last image counter information for
+            each channel
+
+        Returns
+        -------
+        dict
+            Dictionary containing image and buffer information that
+            spans frames
+        dict
+            Dictionary containing last image counter information for
+            each channel
+        """
+        data = self.data[frame]
+        record = data['data']
+        try:
+            record_next = self.data[frame+1]['data']
+            Next_record_Flag = True
+        except Exception as e:
+            # raise e
+            # pass
+            Next_record_Flag = False
+        # print(record)
+
+        # Define Images objects for current frame
+        h_images = Images(self.aux_channels)
+        v_images = Images(self.aux_channels)
+        h150_images = Images(self.aux_channels)
+        v150_images = Images(self.aux_channels)
+
+        record_time = datetime.datetime(data['year'],
+                                        data['month'],
+                                        data['day'],
+                                        data['hour'],
+                                        data['minute'],
+                                        data['second'],
+                                        data['ms'] * 1000)
+
+        # Set parameter defaults for current frame
+        i = img_dict['record_start_idx'] #0
+
+        h_img = img_dict['h_img']
+        v_img = img_dict['v_img']
+        h_len = img_dict['h_len']
+        v_len = img_dict['v_len']
+
+        h150_img = img_dict['h150_img']
+        v150_img = img_dict['v150_img']
+        h150_len = img_dict['h150_len']
+        v150_len = img_dict['v150_len']
+
+        h_rem = 0
+        v_rem = 0
+        h = None
+        v = None
+
+        if self.name == 'HVPS4':
+            hk_length = 83
+            is_hvps4 = True
+        else:
+            hk_length = 53
+            is_hvps4 = False
+        tas = self.hk_data.tas[frame]
+
+        # resolution = self.resolution * 1e-6  # 10µm in meters
+        resolution = self.resolution
+
+        reach_record_end = False
+        next_record_start_idx = 0
+        while i < len(record):
+
+            # # First check if any H or V images remained unprocessed from
+            # # last frame due to image spanning frame boundary. If image
+            # # is present, read remaining bytes of image directly from beginning
+            # # of current frame and store image.
+            # if img_dict['h_rem'] > 0:
+            #     if img_dict['last_h'] is not None:
+            #         h = img_dict['last_h']
+            #         h['n'] = img_dict['h_rem']
+            #         h_decomp, h_count, h_rem, p_pre = self.process_image(record, i, h, is_hvps4)
+            #         h['rem'] = 0
+            #         if h_count == 0:
+            #             h_count = h['count']
+            #         if self.name == 'HVPS4' and h['fifo_array'] == 0:
+            #             h150_img, h150_len, h150_images = self.store_image(h,
+            #                                                                h150_img,
+            #                                                                h_decomp,
+            #                                                                h150_len,
+            #                                                                h150_images,
+            #                                                                record_time,
+            #                                                                frame,
+            #                                                                tas,
+            #                                                                h_count)
+
+            #         else:
+            #             h_img, h_len, h_images = self.store_image(h,
+            #                                                       h_img,
+            #                                                       h_decomp,
+            #                                                       h_len,
+            #                                                       h_images,
+            #                                                       record_time,
+            #                                                       frame,
+            #                                                       tas,
+            #                                                       h_count)
+            #     i += img_dict['h_rem']
+            #     img_dict['h_rem'] = 0
+            # elif img_dict['v_rem'] > 0:
+            #     if img_dict['last_v'] is not None:
+            #         v = img_dict['last_v']
+            #         v['n'] = img_dict['v_rem']
+            #         v_decomp, v_count, v_rem, p_pre = self.process_image(record, i, v, is_hvps4)
+            #         # print(v_count)
+            #         if v_count == 0:
+            #             v_count = v['count']
+            #         v['rem'] = 0
+            #         if self.name == 'HVPS4' and v['fifo_array'] == 0:
+            #             v150_img, v150_len, v150_images = self.store_image(v,
+            #                                                                v150_img,
+            #                                                                v_decomp,
+            #                                                                v150_len,
+            #                                                                v150_images,
+            #                                                                record_time,
+            #                                                                frame,
+            #                                                                tas,
+            #                                                                v_count)
+
+            #         else:
+            #             v_img, v_len, v_images = self.store_image(v,
+            #                                                       v_img,
+            #                                                       v_decomp,
+            #                                                       v_len,
+            #                                                       v_images,
+            #                                                       record_time,
+            #                                                       frame,
+            #                                                       tas,
+            #                                                       v_count)
+            #     i += img_dict['v_rem']
+            #     img_dict['v_rem'] = 0
+
+            # elif record[i] == 12883:  # equals '2S'
+            if record[i] == 12883:  # equals '2S'
+
+                #-- determine whether reaching the end of record; if yes and next record exists, concatenate it, or break loop.
+                if len(record[i:]) >= 5:
+                    h = self.decode_flags(record[i + 1])
+                    v = self.decode_flags(record[i + 2])
+
+                    if i + 5 + h['n'] + v['n'] > len(record): # reach the end of record
+                        reach_record_end = True
+                else:
+                    reach_record_end = True
+
+                if reach_record_end:
+                    if Next_record_Flag:
+                        record_pad = numpy.concatenate((record, record_next))
+                    else:
+                        break
+                else:
+                    record_pad = record      
+
+                #-- process image
+                h = self.decode_flags(record_pad[i + 1])
+                v = self.decode_flags(record_pad[i + 2])
+                image_count = record_pad[i + 3]
+                num_slices = record_pad[i + 4]
+    
+                i += 5
+
+                if (h['mismatch'] == 1) or (v['mismatch'] == 1):
+                    # print('mismatch')
+                    i += h['n'] + v['n']
+                else:
+                    if h['n'] > 0: # Check if images are present in H buffer
+                        h_decomp, h_count, h_rem = self.process_image(record_pad, i, h, is_hvps4)
+
+                        # Store dummy time for now since we will recompute
+                        # following batch processing
+                        image_time = record_time
+
+                        # If probe is HVPS4 and fifo_array flag is 0, current
+                        # image is part of the coarser array
+                        if self.name == 'HVPS4' and h['fifo_array'] == 0:
+                            if h_count == 0:
+                                h_count = prev_counts['h150']
+
+                            h150_img, h150_len, h150_images = self.store_image(h,
+                                                                               h150_img,
+                                                                               h_decomp,
+                                                                               h150_len,
+                                                                               h150_images,
+                                                                               image_time,
+                                                                               frame,
+                                                                               tas,
+                                                                               h_count)
+                            prev_counts['h150'] = h_count
+                            h['count'] = h_count
+
+                        else:
+                            if h_count == 0:
+                                h_count = prev_counts['h']
+                            h_img, h_len, h_images = self.store_image(h,
+                                                                      h_img,
+                                                                      h_decomp,
+                                                                      h_len,
+                                                                      h_images,
+                                                                      image_time,
+                                                                      frame,
+                                                                      tas,
+                                                                      h_count)
+
+                            prev_counts['h'] = h_count
+                            h['count'] = h_count
+
+                    if v['n'] > 0: # Check if image are present in V buffer
+                        v_decomp, v_count, v_rem = self.process_image(record_pad, i, v, is_hvps4)
+
+                        # Store dummy time for now since we will recompute
+                        # following batch processing
+                        image_time = record_time
+
+                        # If probe is HVPS4 and fifo_array flag is 0, current
+                        # image is part of the coarser array
+                        if self.name == 'HVPS4' and v['fifo_array'] == 0:
+                            if v_count == 0:
+                                v_count = prev_counts['v150']
+                            v150_img, v150_len, v150_images = self.store_image(v,
+                                                                               v150_img,
+                                                                               v_decomp,
+                                                                               v150_len,
+                                                                               v150_images,
+                                                                               image_time,
+                                                                               frame,
+                                                                               tas,
+                                                                               v_count)
+                            prev_counts['v150'] = v_count
+                            v['count'] = v_count
+
+                        else:
+                            if v_count == 0:
+                                v_count = prev_counts['v']
+                            v_img, v_len, v_images = self.store_image(v,
+                                                                      v_img,
+                                                                      v_decomp,
+                                                                      v_len,
+                                                                      v_images,
+                                                                      image_time,
+                                                                      frame,
+                                                                      tas,
+                                                                      v_count)
+                            prev_counts['v'] = v_count
+                            v['count'] = v_count
+                            # if frame == 119072 or frame == 119073:
+                            #     print(len(v_decomp) / 128, num_slices, v['n'], i + v['n'], v, v_len, len(record) - (i + v['n']))
+
+                    i += h['n'] + v['n']
+
+                    if reach_record_end:
+                        next_record_start_idx = i - len(record)
+                        break
+
+            elif record[i] == 19787:  # equals 'MK'
+                i += 23
+            elif record[i] == 18507:  # equals 'HK'
+                '''
+                if i + 50 < len(record):
+                    read_tas = numpy.array([record[i + 50], record[i + 49]],
+                                           dtype='u2').view('float32')[0]
+                    tas_dec = read_tas % 1
+                    if read_tas < 1000 and read_tas > 0.1 and tas_dec == 0:
+                        tas = read_tas
+                    i += hk_length
+                else:
+                    i += 1
+                '''
+                if i + hk_length > len(record): # reach the end of record
+                    reach_record_end = True
+                    if Next_record_Flag:
+                        record_pad = numpy.concatenate((record, record_next))
+                    elif i + 50 < len(record):
+                        record_pad = record
+                    else:
+                        break
+                else:
+                    record_pad = record
+
+                #-- obtain tas
+                read_tas = numpy.array([record_pad[i + 50], record_pad[i + 49]],
+                                       dtype='u2').view('float32')[0]
+                tas_dec = read_tas % 1
+                if read_tas < 1000 and read_tas > 0.1 and tas_dec == 0:
+                    tas = read_tas
+
+                i += hk_length
+
+                if reach_record_end:
+                    next_record_start_idx = i - len(record)
+                    break
+
+            elif record[i] == 20044:  # equals 'NL'
+                break
+            else:
+                i += 1
+
+        # Store image parameters for use in subsequent data frames.
+        # *_images is the set of complete images to store in the parent function
+        # *_img is the current 'working' incomplete image
+        # *_len is the length in slices of the current working mage
+        # *_rem is the number of bytes of working image cut off by end of frame
+        # last_* is the last state of the image flag dictionary for the given channel
+        img_dict = {'v_images': v_images,
+                    'v150_images': v150_images,
+                    'v_len': v_len,
+                    'v150_len': v150_len,
+                    'v_img': v_img,
+                    'v150_img': v150_img,
+                    'h_images': h_images,
+                    'h150_images': h150_images,
+                    'h_len': h_len,
+                    'h150_len': h150_len,
+                    'h_img': h_img,
+                    'h150_img': h150_img,
+                    'h_rem': h_rem,
+                    'v_rem': v_rem,
+                    'last_h': h,
+                    'last_v': v,
+                    'record_start_idx': next_record_start_idx
+                    }
+
+        return img_dict, prev_counts    
+    #-----------------------------------------------------------------------
+
+    '''
     def process_frame(self, frame, img_dict, prev_counts):
         """ Method to process single frame of image data. Decompresses image
         data from frame and passes resulting image data to process_image
@@ -659,6 +1010,7 @@ class SPECFile(BinaryFile):
                     }
 
         return img_dict, prev_counts
+    '''
 
     def decode_flags(self, record):
         """ Decode flags for given 16 bit record.
@@ -874,6 +1226,7 @@ class SPECFile(BinaryFile):
 
         return img_decomp, slice_decomp
 
+    '''
     def add_img_slice(self, img_decomp, slice_decomp):
         if len(slice_decomp) % 128 > 0:
             slice_decomp.extend([0] * (128 - (len(slice_decomp) % 128)))
@@ -881,6 +1234,7 @@ class SPECFile(BinaryFile):
         slice_decomp = []
 
         return img_decomp, slice_decomp
+    '''
 
 
 class FrameInfo(object):
