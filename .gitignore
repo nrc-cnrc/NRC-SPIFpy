@@ -15,3 +15,4 @@ base*
 *sublime*
 spifpy.egg-info/**
 venv/**
+nrc_spifpy.egg-info/**
