@@ -421,7 +421,8 @@ class SPIFFile(object):
 
         self.rootgrp.sync()
 
-    def write_images_with_extra_aux_dtypes(self, inst_name, images, aux_dtypes):
+    def write_images_with_extra_aux_dtypes(self, inst_name, images, aux_dtypes,
+                                           aux_attrs=None):
         """ Writes image information to NetCDF file. If image information
         already exists in NetCDF file, new image information is appended
         to the end of existing data.
@@ -432,6 +433,11 @@ class SPIFFile(object):
             Instrument name to write image information to.
         images : Images object
             Images object containing image information to write to file.
+        aux_dtypes : dict
+            Mapping of auxiliary variable names to NetCDF data types.
+        aux_attrs : dict, optional
+            Mapping of auxiliary variable names to NetCDF attribute
+            dictionaries.
         """
         instgrp = self.instgrps[inst_name]
         coregrp = instgrp['core']
@@ -445,11 +451,14 @@ class SPIFFile(object):
         for key, val in images.__dict__.items():
             if key not in images.default_items:
                 if key not in coregrp.variables.keys():
+                    attrs = None
+                    if aux_attrs is not None and key in aux_attrs:
+                        attrs = dict(aux_attrs[key])
                     self.create_variable(coregrp,
                                          key,
                                          aux_dtypes[key],
                                          ('Images',),
-                                         attrs=None,
+                                         attrs=attrs,
                                          data=val,
                                          zlib=True,
                                          chunksizes=(TIME_CHUNK,))
@@ -495,4 +504,3 @@ class SPIFFile(object):
         """ Closes NetCDF file.
         """
         self.rootgrp.close()
-

@@ -82,10 +82,10 @@ class TwoDFile(BinaryFile):
 
         pbar1 = tqdm(desc='Processing frames',
                      total=process_until,
-                     unit='frame')
+                     unit=' frame')
         pbar2 = tqdm(desc='Writing frames',
                      total=process_until,
-                     unit='frame')
+                     unit=' frame')
         t00 = time.time()
 
         i = 0

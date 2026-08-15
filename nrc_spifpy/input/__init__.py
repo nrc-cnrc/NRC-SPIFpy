@@ -4,6 +4,7 @@ from nrc_spifpy.input.dmt_grey_file import DMTGreyFile
 #from nrc_spifpy.input.dmt.mono.dmt_mono_file import DMTMonoFile
 from nrc_spifpy.input.dmt_grey_mono_file import DMTGreyMonoFile
 from nrc_spifpy.input.dmt_mono_file import DMTMonoFile
+from nrc_spifpy.input.fast_2ds_file import Fast2DSFile
 #from nrc_spifpy.input.spec.spec_file import SPECFile
 from nrc_spifpy.input.spec_file import SPECFile
 from nrc_spifpy.input.twod_file import TwoDFile

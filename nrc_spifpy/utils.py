@@ -22,6 +22,14 @@ def convert_datetimes_to_seconds(start_date, datetimes):
     list of float
         Total elapsed seconds from start_date for each element in datetimes list.
     """
+    if isinstance(datetimes, numpy.ndarray) and numpy.issubdtype(datetimes.dtype, numpy.datetime64):
+        # Vectorized calculation for numpy datetime64 array
+        start_date_np = numpy.datetime64(start_date)
+        # Convert to seconds (float)
+        # (datetime64[ns] - datetime64[ns]) / timedelta64(1, 's')
+        datetimes_seconds = (datetimes - start_date_np) / numpy.timedelta64(1, 's')
+        return datetimes_seconds
+
     datetimes_seconds = [(dt - start_date).total_seconds() for dt in datetimes]
 
     return datetimes_seconds

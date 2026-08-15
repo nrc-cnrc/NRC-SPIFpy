@@ -16,6 +16,7 @@ from nrc_spifpy.input import DMTGreyFile
 from nrc_spifpy.input import DMTGreyMonoFile
 from nrc_spifpy.input import SPECFile
 from nrc_spifpy.input import TwoDFile
+from nrc_spifpy.input import Fast2DSFile
 from nrc_spifpy.spif import SPIFCore
 
 inst_dict = {'2DC': TwoDFile,
@@ -24,6 +25,7 @@ inst_dict = {'2DC': TwoDFile,
              'CIPGS': DMTGreyFile,
              'PIP': DMTMonoFile,
              '2DS': SPECFile,
+             'Fast2DS': Fast2DSFile,
              'HVPS': SPECFile,
              'HVPS4': SPECFile}
 
@@ -46,7 +48,7 @@ def extract():
      transformed_args = args_transformer.transform_args()
 
      spif_core = call_spifcore(transformed_args)
-     spif_core.process(processors=None)
+     spif_core.process(processors=transformed_args['processors'])
 
 def get_parser():
     parser = argparse.ArgumentParser(description='Processes raw OAP data to' +
@@ -63,6 +65,12 @@ def get_parser():
                         dest='output',
                         type=str,
                         help='Filename to use for SPIF output',
+                        default=None)
+
+    parser.add_argument('-j', '--num-workers',
+                        dest='processors',
+                        type=int,
+                        help='Number of parallel workers (default: all cores)',
                         default=None)
 
     return parser
@@ -154,14 +162,19 @@ class ArgsTransformer:
               'output':None,
               'aux_file':None,
               'aux_config':None,
+              'processors':None,
          }
 
      def transform_args(self):
           self.transform_filename()
           self.transform_config()
           self.transform_output()
+          self.transform_processors()
           
           return self.transformed_args
+
+     def transform_processors(self):
+          self.transformed_args['processors'] = self.args.processors
 
      def transform_filename(self):
           self.transformed_args['filename'] = pl.Path(self.args.filename)
@@ -175,3 +188,6 @@ class ArgsTransformer:
                self.transformed_args['output'] = input.parent / (input.name.replace('.','_') + '.nc')
           else:
                self.transformed_args['output'] = pl.Path(self.args.output)
+
+if __name__ == "__main__":
+    extract()

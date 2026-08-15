@@ -1,7 +1,13 @@
 import io
 import os
 
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Extension
+try:
+    from Cython.Build import cythonize
+    import numpy
+    HAS_CYTHON = True
+except ImportError:
+    HAS_CYTHON = False
 
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 
@@ -26,6 +32,20 @@ def get_version():
     return context["__version__"]
 
 
+
+extensions = []
+if HAS_CYTHON:
+    extensions = [
+        Extension(
+            "nrc_spifpy.input.fast_2ds_decoder",
+            ["nrc_spifpy/input/fast_2ds_decoder.pyx"],
+            include_dirs=[numpy.get_include()],
+        )
+    ]
+    ext_modules_arg = cythonize(extensions)
+else:
+    ext_modules_arg = []
+
 setup(
     name="nrc_spifpy",
     version=get_version(),
@@ -35,7 +55,9 @@ setup(
     long_description_content_type="text/markdown",
     author="Kenny Bala",
     author_email="Kliti.Bala@nrc-cnrc.gc.ca",
-    url="https://github.com/nrc-cnrc/NRC-SPIFpy",
+    maintainer="Yongjie Huang",
+    maintainer_email="huangynj@gmail.com",
+    url="https://github.com/huangynj/COPS-NRC-SPIFpy",
     install_requires=get_requirements("requirements/requirements.txt"),
     license="MIT",
     keywords="SPIF, Converter",
@@ -65,4 +87,5 @@ setup(
         nrc-spifpy-cut=nrc_spifpy.scripts.cut:cut
     ''',
     python_requires=">=3.6.0",
+    ext_modules=ext_modules_arg,
 )

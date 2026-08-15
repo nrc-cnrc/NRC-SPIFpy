@@ -38,6 +38,36 @@ class SPECFile(BinaryFile):
         Name of current instrument.
     """
     syncword = numpy.array([3] * 128)
+    TIMING_ANCHOR_WINDOW_SECONDS = 300.0
+    COUNTER_GAP_TOLERANCE_SECONDS = 10.0
+    AUX_DTYPES = {
+        'tas': 'f4',
+        'clock_counts': 'u8',
+        'overload_flag': 'u1',
+    }
+    AUX_ATTRS = {
+        'tas': {
+            'long_name': 'True airspeed as recorded by probe',
+            'units': 'm/s',
+        },
+        'clock_counts': {
+            'long_name': 'Probe clock count at the last image slice',
+            'units': '1',
+            'comment': (
+                'Free-running counter stored modulo 2^32 for 2DS and HVPS, '
+                'or modulo 2^48 for HVPS4.'
+            ),
+        },
+        'overload_flag': {
+            'long_name': 'Probe particle overload status',
+            'units': '1',
+            'flag_values': numpy.array([0, 1], dtype=numpy.uint8),
+            'flag_meanings': 'not_overloaded overloaded',
+            'comment': (
+                'Active-high flag decoded from bit 15 of the channel header.'
+            ),
+        },
+    }
 
     def __init__(self, filename, inst_name, resolution):
         super().__init__(filename, inst_name, resolution)
@@ -53,7 +83,7 @@ class SPECFile(BinaryFile):
                                        ('data', '(2048, )u2'),
                                        ('discard', 'u2')
                                        ])
-        self.aux_channels = ['tas', 'clock_counts']
+        self.aux_channels = ['tas', 'clock_counts', 'overload_flag']
 
     def calc_buffer_datetimes(self):
         """ Calculates datetimes from bufffers read in from file and sets
@@ -144,10 +174,10 @@ class SPECFile(BinaryFile):
 
         pbar1 = tqdm(desc='Processing frames',
                      total=process_until - start,
-                     unit='frame')
+                     unit=' frame')
         pbar2 = tqdm(desc='Writing frames',
                      total=process_until - start,
-                     unit='frame')
+                     unit=' frame')
 
         t00 = time.time()
         i = 0
@@ -200,10 +230,142 @@ class SPECFile(BinaryFile):
 
         self.calc_image_times(inst_groups, spiffile)
 
+    @staticmethod
+    def _unwrap_counter(counts, modulus):
+        """Return elapsed counter ticks with hardware rollovers removed."""
+        counts = numpy.asarray(
+            numpy.ma.filled(counts, 0), dtype=numpy.uint64
+        )
+        if len(counts) == 0:
+            return numpy.array([], dtype=numpy.uint64)
+
+        # Modular subtraction handles 32- and 48-bit rollovers without
+        # detecting or treating the rollover locations as timing breaks.
+        delta = numpy.mod(
+            numpy.diff(counts.astype(numpy.int64)), modulus
+        ).astype(numpy.uint64)
+        return numpy.concatenate((
+            numpy.array([0], dtype=numpy.uint64),
+            numpy.cumsum(delta, dtype=numpy.uint64),
+        ))
+
+    @staticmethod
+    def _fill_missing_tas(tas):
+        """Interpolate missing TAS values, or return None if all are invalid."""
+        tas = numpy.asarray(
+            numpy.ma.filled(tas, numpy.nan), dtype=numpy.float64
+        ).copy()
+        valid = numpy.isfinite(tas) & (tas > 0)
+        if not numpy.any(valid):
+            return None
+        if not numpy.all(valid):
+            missing = numpy.flatnonzero(~valid)
+            tas[missing] = numpy.interp(
+                missing, numpy.flatnonzero(valid), tas[valid]
+            )
+        return tas
+
+    def _smoothed_buffer_offset(self, elapsed_time, buffer_time):
+        """Return a slowly varying UTC offset from end-of-buffer anchors."""
+        anchor = numpy.flatnonzero(numpy.concatenate((
+            numpy.diff(buffer_time) != 0,
+            [True],
+        )))
+        residual = buffer_time[anchor] - elapsed_time[anchor]
+        window = numpy.floor(
+            (buffer_time[anchor] - buffer_time[anchor][0])
+            / self.TIMING_ANCHOR_WINDOW_SECONDS
+        ).astype(numpy.int64)
+
+        centers = []
+        offsets = []
+        for window_id in numpy.unique(window):
+            selected = window == window_id
+            centers.append(numpy.median(elapsed_time[anchor][selected]))
+            offsets.append(numpy.median(residual[selected]))
+
+        centers = numpy.asarray(centers, dtype=numpy.float64)
+        offsets = numpy.asarray(offsets, dtype=numpy.float64)
+        increasing = numpy.concatenate(([True], numpy.diff(centers) > 0))
+        return numpy.interp(
+            elapsed_time, centers[increasing], offsets[increasing]
+        )
+
+    def _calculate_image_times(self, counts, tas, buffer_time):
+        """Calculate counter-based image times anchored to buffer timestamps."""
+        counts = numpy.asarray(counts)
+        buffer_time = numpy.asarray(buffer_time, dtype=numpy.float64)
+        tas = self._fill_missing_tas(tas)
+
+        if counts.shape != buffer_time.shape:
+            raise ValueError('counts and buffer_time must have the same shape')
+        if len(counts) == 0:
+            return buffer_time.copy()
+        if tas is None:
+            return buffer_time.copy()
+        if tas.shape != counts.shape:
+            raise ValueError('counts and tas must have the same shape')
+
+        modulus = 1 << (48 if self.name == 'HVPS4' else 32)
+        elapsed_count = self._unwrap_counter(counts, modulus)
+        delta_count = numpy.diff(
+            elapsed_count, prepend=elapsed_count[0]
+        ).astype(numpy.float64)
+
+        # HVPS4 counter ticks are 50 µm even though its coarse physical pixels
+        # and INI resolution are 150 µm.
+        timing_resolution = 50 if self.name == 'HVPS4' else self.resolution
+        delta_time = delta_count * timing_resolution * 1.0e-6 / tas
+        delta_buffer = numpy.diff(
+            buffer_time, prepend=buffer_time[0]
+        )
+
+        # A normal rollover has a small modular delta. Only split the timeline
+        # for a real acquisition gap, backwards buffer time, or implausibly
+        # large counter jump (for example, a counter reset).
+        discontinuity = (
+            (delta_buffer > 200.0)
+            | (delta_buffer < 0.0)
+            | (
+                delta_time
+                > numpy.maximum(delta_buffer, 0.0)
+                + self.COUNTER_GAP_TOLERANCE_SECONDS
+            )
+        )
+        block_starts = numpy.flatnonzero(discontinuity)
+        block_starts = block_starts[block_starts > 0]
+
+        image_time = buffer_time.copy()
+        for block in numpy.split(numpy.arange(len(counts)), block_starts):
+            block_delta = delta_time[block].copy()
+            block_delta[0] = 0.0
+            elapsed_time = numpy.cumsum(block_delta)
+            block_buffer_time = buffer_time[block]
+            offset = self._smoothed_buffer_offset(
+                elapsed_time, block_buffer_time
+            )
+            image_time[block] = elapsed_time + offset
+
+        return image_time
+
+    @staticmethod
+    def _split_seconds(image_time):
+        """Split relative seconds into normalized integer seconds and ns."""
+        seconds = numpy.floor(image_time).astype(numpy.int64)
+        nanoseconds = numpy.rint(
+            (image_time - seconds) * 1.0e9
+        ).astype(numpy.int64)
+        carry = nanoseconds >= 1_000_000_000
+        seconds[carry] += 1
+        nanoseconds[carry] -= 1_000_000_000
+        return seconds, nanoseconds
+
     def calc_image_times(self, inst_groups, spiffile):
-        """
-        Recalucates image times based on procedure implemented by Aaron Bansemer
-        in SODA2 (see file specnewtime.pro).
+        """Recalculate image times from the probe counter and buffer UTC.
+
+        Counter rollover is handled by modular subtraction. Buffer timestamps
+        anchor the counter-derived elapsed time and separate true acquisition
+        gaps or counter resets.
 
         Parameters
         ----------
@@ -212,91 +374,39 @@ class SPECFile(BinaryFile):
         spiffile : SPIFFile object
             SPIFFile object of current SPIF NetCDF output file
 
+        History:
+            - 2026-07-15: Yongjie Huang, replaced explicit rollover segments
+                          with modular counter unwrapping and smoothed buffer
+                          UTC anchoring.
+            - 2022-10-28: Kenny Bala, first implementation based on the SODA2
+                          ``specnewtime.pro`` procedure.
         """
 
-        # Define needed parameters for recomputing times
-        times = numpy.array(self.datetimes, dtype='datetime64[ns]') - numpy.datetime64(self.start_date)
-        secs = times.astype('timedelta64[s]')
-        ns = times - secs
-        datetimes = secs.astype(float) + ns.astype(float) * 1e-9
+        frame_time = (
+            numpy.asarray(self.datetimes, dtype='datetime64[ns]')
+            - numpy.datetime64(self.start_date)
+        ) / numpy.timedelta64(1, 's')
 
         # Iterate over instrument groups in current file
-        for i, inst_group in enumerate(inst_groups):
-
-            # Read relevant parameters from spiffile
-            buffer_indx = spiffile.instgrps[inst_group]['core']['buffer_index'][:]
+        for inst_group in inst_groups:
+            core = spiffile.instgrps[inst_group]['core']
+            buffer_indx = numpy.asarray(
+                core['buffer_index'][:], dtype=numpy.int64
+            )
             try:
-                tas = spiffile.instgrps[inst_group]['core']['tas'][:]
+                tas = core['tas'][:]
             except IndexError:
                 continue
-            counts = spiffile.instgrps[inst_group]['core']['clock_counts'][:]
-
-            # Get timestamp for each image corresponding their parent buffer
-            buffer_time = datetimes[buffer_indx]
-
-            # Calculate delta between counter and buffer
-            delta_count = numpy.diff(counts, prepend=counts[0])
-            delta_buffer = numpy.diff(buffer_time, prepend=buffer_time[0])
-
-            # Find places where counter rolled over -- should happen every
-            # 5.5 mins at 150 m/s
-            # Checks both for negative counter value, and large gap in buffer time
-            rollover = numpy.where((delta_count < 0) | (delta_buffer > 200))[0]
-
-            # Add rollover max time to get positive delta times
-            # HVPS4 has 48 bit counter, all other probes have 32 bit counter
-            if self.name == 'HVPS4':
-                delta_count[delta_count < 0] += 2 ** 48
-            else:
-                delta_count[delta_count < 0] += 2 ** 32
-
-            # Convert delta counter to delta time based on airspeed
-            delta_time = delta_count * self.resolution / tas * 1e-6
-
-            # Calculate times at the end of each buffer -- this is used below
-            # to match buffer times to the partcile time at the end of each
-            # buffer
-            itimematch = numpy.where(delta_buffer > 0)[0] - 1
-
-            # Use buffer time as best first guess, should be no drift or rollovers
-            newtime = buffer_time
-            elapsed_time = numpy.zeros(len(newtime))
-
-            # Set rollover indexes for use in loop below. If there were no
-            # rollovers, only value needed is the end of the array. Otherwise
-            # Each rollover location plus the end of the array is needed.
-            if len(rollover) > 0:
-                rollover = numpy.append(rollover, [len(newtime)])
-            else:
-                rollover = [len(newtime)]
-
-            # Loop over all rollover locations to calculate best time within
-            # each period.
-            istart = 0
-            for ro in rollover:
-                istop = ro - 1
-                # Calculate total elapsed counter time in each rollover period
-                elapsed_time[istart: istop] = numpy.cumsum(delta_time[istart: istop])
-
-                # Find buffer boundaries that fall within rollover period
-                matches = numpy.where((itimematch > istart) & (itimematch < istop))[0]
-
-                # Find median difference between buffer boundaries and
-                # image counter elapsed time within rollover period
-                # and add this to elapsed time to calculate new image time
-                offset = numpy.median(buffer_time[itimematch[matches]] - elapsed_time[itimematch[matches]])
-                newtime[istart: istop] = elapsed_time[istart: istop] + offset
-                istart = ro
-
-            # Recalculate seconds and ns from new time
-            epoch_time = numpy.modf(newtime)
-            secs = epoch_time[1]
-            ns = epoch_time[0] * 1e9
+            counts = core['clock_counts'][:]
+            buffer_time = frame_time[buffer_indx]
+            image_time = self._calculate_image_times(
+                counts, tas, buffer_time
+            )
+            secs, ns = self._split_seconds(image_time)
 
             # Save new time to file
-            grp = spiffile.instgrps[inst_group]['core']
-            spiffile.write_variable(grp, 'image_sec', secs)
-            spiffile.write_variable(grp, 'image_ns', ns)
+            spiffile.write_variable(core, 'image_sec', secs)
+            spiffile.write_variable(core, 'image_ns', ns)
 
     def partial_write(self, spiffile, h_p, v_p, h_p150=None, v_p150=None):
         """ Called each time number of unsaved processed images exceeds
@@ -335,7 +445,12 @@ class SPECFile(BinaryFile):
     def _partial_write(self, spiffile, images, suffix=''):
         if len(images) > 0:
             images.conv_to_array(self.diodes)
-            spiffile.write_images(self.name + suffix, images)
+            spiffile.write_images_with_extra_aux_dtypes(
+                self.name + suffix,
+                images,
+                self.AUX_DTYPES,
+                self.AUX_ATTRS,
+            )
 
     def process_frames(self, frames):
         h_p = Images(self.aux_channels)
@@ -369,7 +484,8 @@ class SPECFile(BinaryFile):
                     'h_rem': 0,
                     'v_rem': 0,
                     'last_h': None,
-                    'last_v': None
+                    'last_v': None,
+                    'record_start_idx': 0, # Yongjie, 2024-08-06.
                     }
 
         for frame in frames:
@@ -382,6 +498,356 @@ class SPECFile(BinaryFile):
 
         return h_p, v_p, h150_p, v150_p, frames
 
+
+    #---------------------------------------------------------------------
+    # Update the function 'process_frame' with a new method via adding 
+    #   next data block to obtain full data record if necessary.
+    # Yongjie Huang (OU, huangynj@gmail.com), 2024-08-06.
+    #
+    def process_frame(self, frame, img_dict, prev_counts):
+        """ Method to process single frame of image data. Decompresses image
+        data from frame and passes resulting image data to process_image
+        method to extract image info from image buffer.
+
+        Parameters
+        ----------
+        frame : int
+            Frame number in self.data to process.
+        img_dict : dict
+            Dictionary containing image and buffer information that
+            spans frames
+        prev_counts : dict
+            Dictionary containing last image counter information for
+            each channel
+
+        Returns
+        -------
+        dict
+            Dictionary containing image and buffer information that
+            spans frames
+        dict
+            Dictionary containing last image counter information for
+            each channel
+        """
+        data = self.data[frame]
+        record = data['data']
+        try:
+            record_next = self.data[frame+1]['data']
+            next_record_exists = True
+        except Exception as e:
+            # raise e
+            # pass
+            next_record_exists = False
+        # print(record)
+
+        # Define Images objects for current frame
+        h_images = Images(self.aux_channels)
+        v_images = Images(self.aux_channels)
+        h150_images = Images(self.aux_channels)
+        v150_images = Images(self.aux_channels)
+
+        record_time = datetime.datetime(data['year'],
+                                        data['month'],
+                                        data['day'],
+                                        data['hour'],
+                                        data['minute'],
+                                        data['second'],
+                                        data['ms'] * 1000)
+
+        # Set parameter defaults for current frame
+        i = img_dict['record_start_idx'] #0
+
+        h_img = img_dict['h_img']
+        v_img = img_dict['v_img']
+        h_len = img_dict['h_len']
+        v_len = img_dict['v_len']
+
+        h150_img = img_dict['h150_img']
+        v150_img = img_dict['v150_img']
+        h150_len = img_dict['h150_len']
+        v150_len = img_dict['v150_len']
+
+        h_rem = 0
+        v_rem = 0
+        h = None
+        v = None
+
+        if self.name == 'HVPS4':
+            hk_length = 83
+            is_hvps4 = True
+        else:
+            hk_length = 53
+            is_hvps4 = False
+        tas = self.hk_data.tas[frame]
+
+        # resolution = self.resolution * 1e-6  # 10µm in meters
+        resolution = self.resolution
+
+        reach_record_end = False
+        next_record_start_idx = 0
+        while i < len(record):
+
+            # # First check if any H or V images remained unprocessed from
+            # # last frame due to image spanning frame boundary. If image
+            # # is present, read remaining bytes of image directly from beginning
+            # # of current frame and store image.
+            # if img_dict['h_rem'] > 0:
+            #     if img_dict['last_h'] is not None:
+            #         h = img_dict['last_h']
+            #         h['n'] = img_dict['h_rem']
+            #         h_decomp, h_count, h_rem, p_pre = self.process_image(record, i, h, is_hvps4)
+            #         h['rem'] = 0
+            #         if h_count == 0:
+            #             h_count = h['count']
+            #         if self.name == 'HVPS4' and h['fifo_array'] == 0:
+            #             h150_img, h150_len, h150_images = self.store_image(h,
+            #                                                                h150_img,
+            #                                                                h_decomp,
+            #                                                                h150_len,
+            #                                                                h150_images,
+            #                                                                record_time,
+            #                                                                frame,
+            #                                                                tas,
+            #                                                                h_count)
+
+            #         else:
+            #             h_img, h_len, h_images = self.store_image(h,
+            #                                                       h_img,
+            #                                                       h_decomp,
+            #                                                       h_len,
+            #                                                       h_images,
+            #                                                       record_time,
+            #                                                       frame,
+            #                                                       tas,
+            #                                                       h_count)
+            #     i += img_dict['h_rem']
+            #     img_dict['h_rem'] = 0
+            # elif img_dict['v_rem'] > 0:
+            #     if img_dict['last_v'] is not None:
+            #         v = img_dict['last_v']
+            #         v['n'] = img_dict['v_rem']
+            #         v_decomp, v_count, v_rem, p_pre = self.process_image(record, i, v, is_hvps4)
+            #         # print(v_count)
+            #         if v_count == 0:
+            #             v_count = v['count']
+            #         v['rem'] = 0
+            #         if self.name == 'HVPS4' and v['fifo_array'] == 0:
+            #             v150_img, v150_len, v150_images = self.store_image(v,
+            #                                                                v150_img,
+            #                                                                v_decomp,
+            #                                                                v150_len,
+            #                                                                v150_images,
+            #                                                                record_time,
+            #                                                                frame,
+            #                                                                tas,
+            #                                                                v_count)
+
+            #         else:
+            #             v_img, v_len, v_images = self.store_image(v,
+            #                                                       v_img,
+            #                                                       v_decomp,
+            #                                                       v_len,
+            #                                                       v_images,
+            #                                                       record_time,
+            #                                                       frame,
+            #                                                       tas,
+            #                                                       v_count)
+            #     i += img_dict['v_rem']
+            #     img_dict['v_rem'] = 0
+
+            # elif record[i] == 12883:  # equals '2S'
+            if record[i] == 12883:  # equals '2S'
+
+                #-- determine whether reaching the end of record; if yes and next record exists, concatenate it, or break loop.
+                if len(record[i:]) >= 5:
+                    h = self.decode_flags(record[i + 1])
+                    v = self.decode_flags(record[i + 2])
+
+                    if i + 5 + h['n'] + v['n'] > len(record): # reach the end of record
+                        reach_record_end = True
+                else:
+                    reach_record_end = True
+
+                if reach_record_end:
+                    if next_record_exists:
+                        record_pad = numpy.concatenate((record, record_next))
+                    else:
+                        break
+                else:
+                    record_pad = record      
+
+                #-- process image
+                h = self.decode_flags(record_pad[i + 1])
+                v = self.decode_flags(record_pad[i + 2])
+                image_count = record_pad[i + 3]
+                num_slices = record_pad[i + 4]
+    
+                i += 5
+
+                if (h['mismatch'] == 1) or (v['mismatch'] == 1):
+                    # print('mismatch')
+                    i += h['n'] + v['n']
+                else:
+                    if h['n'] > 0: # Check if images are present in H buffer
+                        h_decomp, h_count, h_rem = self.process_image(record_pad, i, h, is_hvps4)
+
+                        # Store dummy time for now since we will recompute
+                        # following batch processing
+                        image_time = record_time
+
+                        # If probe is HVPS4 and fifo_array flag is 0, current
+                        # image is part of the coarser array
+                        if self.name == 'HVPS4' and h['fifo_array'] == 0:
+                            if h_count == 0:
+                                h_count = prev_counts['h150']
+
+                            h150_img, h150_len, h150_images = self.store_image(h,
+                                                                               h150_img,
+                                                                               h_decomp,
+                                                                               h150_len,
+                                                                               h150_images,
+                                                                               image_time,
+                                                                               frame,
+                                                                               tas,
+                                                                               h_count)
+                            prev_counts['h150'] = h_count
+                            h['count'] = h_count
+
+                        else:
+                            if h_count == 0:
+                                h_count = prev_counts['h']
+                            h_img, h_len, h_images = self.store_image(h,
+                                                                      h_img,
+                                                                      h_decomp,
+                                                                      h_len,
+                                                                      h_images,
+                                                                      image_time,
+                                                                      frame,
+                                                                      tas,
+                                                                      h_count)
+
+                            prev_counts['h'] = h_count
+                            h['count'] = h_count
+
+                    if v['n'] > 0: # Check if image are present in V buffer
+                        v_decomp, v_count, v_rem = self.process_image(record_pad, i, v, is_hvps4)
+
+                        # Store dummy time for now since we will recompute
+                        # following batch processing
+                        image_time = record_time
+
+                        # If probe is HVPS4 and fifo_array flag is 0, current
+                        # image is part of the coarser array
+                        if self.name == 'HVPS4' and v['fifo_array'] == 0:
+                            if v_count == 0:
+                                v_count = prev_counts['v150']
+                            v150_img, v150_len, v150_images = self.store_image(v,
+                                                                               v150_img,
+                                                                               v_decomp,
+                                                                               v150_len,
+                                                                               v150_images,
+                                                                               image_time,
+                                                                               frame,
+                                                                               tas,
+                                                                               v_count)
+                            prev_counts['v150'] = v_count
+                            v['count'] = v_count
+
+                        else:
+                            if v_count == 0:
+                                v_count = prev_counts['v']
+                            v_img, v_len, v_images = self.store_image(v,
+                                                                      v_img,
+                                                                      v_decomp,
+                                                                      v_len,
+                                                                      v_images,
+                                                                      image_time,
+                                                                      frame,
+                                                                      tas,
+                                                                      v_count)
+                            prev_counts['v'] = v_count
+                            v['count'] = v_count
+                            # if frame == 119072 or frame == 119073:
+                            #     print(len(v_decomp) / 128, num_slices, v['n'], i + v['n'], v, v_len, len(record) - (i + v['n']))
+
+                    i += h['n'] + v['n']
+
+                    if reach_record_end:
+                        next_record_start_idx = i - len(record)
+                        break
+
+            elif record[i] == 19787:  # equals 'MK'
+                i += 23
+            elif record[i] == 18507:  # equals 'HK'
+                '''
+                if i + 50 < len(record):
+                    read_tas = numpy.array([record[i + 50], record[i + 49]],
+                                           dtype='u2').view('float32')[0]
+                    tas_dec = read_tas % 1
+                    if read_tas < 1000 and read_tas > 0.1 and tas_dec == 0:
+                        tas = read_tas
+                    i += hk_length
+                else:
+                    i += 1
+                '''
+                if i + hk_length > len(record): # reach the end of record
+                    reach_record_end = True
+                    if next_record_exists:
+                        record_pad = numpy.concatenate((record, record_next))
+                    elif i + 50 < len(record):
+                        record_pad = record
+                    else:
+                        break
+                else:
+                    record_pad = record
+
+                #-- obtain tas
+                read_tas = numpy.array([record_pad[i + 50], record_pad[i + 49]],
+                                       dtype='u2').view('float32')[0]
+                tas_dec = read_tas % 1
+                if read_tas < 1000 and read_tas > 0.1 and tas_dec == 0:
+                    tas = read_tas
+
+                i += hk_length
+
+                if reach_record_end:
+                    next_record_start_idx = i - len(record)
+                    break
+
+            elif record[i] == 20044:  # equals 'NL'
+                break
+            else:
+                i += 1
+
+        # Store image parameters for use in subsequent data frames.
+        # *_images is the set of complete images to store in the parent function
+        # *_img is the current 'working' incomplete image
+        # *_len is the length in slices of the current working mage
+        # *_rem is the number of bytes of working image cut off by end of frame
+        # last_* is the last state of the image flag dictionary for the given channel
+        img_dict = {'v_images': v_images,
+                    'v150_images': v150_images,
+                    'v_len': v_len,
+                    'v150_len': v150_len,
+                    'v_img': v_img,
+                    'v150_img': v150_img,
+                    'h_images': h_images,
+                    'h150_images': h150_images,
+                    'h_len': h_len,
+                    'h150_len': h150_len,
+                    'h_img': h_img,
+                    'h150_img': h150_img,
+                    'h_rem': h_rem,
+                    'v_rem': v_rem,
+                    'last_h': h,
+                    'last_v': v,
+                    'record_start_idx': next_record_start_idx
+                    }
+
+        return img_dict, prev_counts    
+    #-----------------------------------------------------------------------
+
+    '''
     def process_frame(self, frame, img_dict, prev_counts):
         """ Method to process single frame of image data. Decompresses image
         data from frame and passes resulting image data to process_image
@@ -659,6 +1125,7 @@ class SPECFile(BinaryFile):
                     }
 
         return img_dict, prev_counts
+    '''
 
     def decode_flags(self, record):
         """ Decode flags for given 16 bit record.
@@ -801,6 +1268,7 @@ class SPECFile(BinaryFile):
                 images.buffer_index.append(frame)
                 images.tas.append(tas)
                 images.clock_counts.append(clock_counts)
+                images.overload_flag.append(p['overload'])
             p_img = None
             p_len = 0
 
@@ -874,6 +1342,7 @@ class SPECFile(BinaryFile):
 
         return img_decomp, slice_decomp
 
+    '''
     def add_img_slice(self, img_decomp, slice_decomp):
         if len(slice_decomp) % 128 > 0:
             slice_decomp.extend([0] * (128 - (len(slice_decomp) % 128)))
@@ -881,6 +1350,7 @@ class SPECFile(BinaryFile):
         slice_decomp = []
 
         return img_decomp, slice_decomp
+    '''
 
 
 class FrameInfo(object):

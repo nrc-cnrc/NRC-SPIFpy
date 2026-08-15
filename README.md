@@ -1,3 +1,61 @@
+# COPS-NRC-SPIFpy
+
+**COPS-NRC-SPIFpy** is the
+**[CLOUD²S](https://huangynj.github.io)**-maintained extension of NRC's Single
+Particle Image Format conversion utility
+([NRC-SPIFpy](https://github.com/nrc-cnrc/NRC-SPIFpy)) for
+**[Cloud Optical array probe Processing Software (COPS)](https://github.com/huangynj/COPS)**.
+It converts raw Optical Array Probe (OAP) data to SPIF-formatted NetCDF while
+retaining the upstream `nrc_spifpy` Python package and command-line interfaces.
+
+## Current package focus
+
+- Decode the upstream probe formats supported by
+  [NRC-SPIFpy](https://github.com/nrc-cnrc/NRC-SPIFpy), including 2DC,
+  2DP, CIP, PIP, 2D-S, HVPS, and their configured variants.
+- Decode Fast 2D-S Type 48 data with optional Cython acceleration, external
+  housekeeping data, preserved 48-bit probe counters, and counter-derived
+  particle timing.
+- Decode SPEC 2D-S, HVPS, and HVPS-4 data with modular 32- or 48-bit counter
+  rollover handling, TAS-based interarrival times, PC-buffer UTC anchoring,
+  and full-precision counter output.
+- Preserve particle timing provenance and SPIF-compatible image, buffer, and
+  auxiliary variables for downstream
+  [COPS](https://github.com/huangynj/COPS) processing.
+
+The project repository is maintained at
+<https://github.com/huangynj/COPS-NRC-SPIFpy>. The installable distribution and
+import package remain named `nrc_spifpy` for compatibility with the original
+project.
+
+## Quick start
+
+Install the development checkout:
+
+```console
+python -m pip install --editable .
+```
+
+Decode a raw probe file using one of the instrument configurations in
+`nrc_spifpy/config/`:
+
+```console
+nrc-spifpy-extract RAW_FILE CONFIG.ini -o output.nc
+```
+
+Run the current regression suite:
+
+```console
+python -m pytest -q tests
+```
+
+The original NRC-SPIFpy README is preserved below for its upstream
+installation, usage, citation, and acknowledgment information.
+
+---
+
+## Original NRC-SPIFpy README
+
 # NRC SPIFpy
 
 NRC's Single Particle Image Format (SPIF) conversion utility. 

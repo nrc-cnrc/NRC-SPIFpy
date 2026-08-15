@@ -80,10 +80,10 @@ class DMTBinaryFile(BinaryFile):
 
         pbar1 = tqdm(desc='Processing frames',
                      total=len(self.data),
-                     unit='frame')
+                     unit=' frame')
         pbar2 = tqdm(desc='Writing frames',
                      total=process_until,
-                     unit='frame')
+                     unit=' frame')
         t00 = time.time()
 
         i = 0
@@ -111,7 +111,7 @@ class DMTBinaryFile(BinaryFile):
                         t0 = time.time()
                         if len(images) > 0:
                             images.conv_to_array(self.diodes)
-                            spiffile.write_images(self.name, images)
+                            self._write_images(spiffile, images)
 
                         futures.pop(indx)
 
@@ -122,6 +122,20 @@ class DMTBinaryFile(BinaryFile):
         pbar2.close()
         t11 = time.time()
         print(f'{tot_images} images processed in {t11 - t00:0.3f} seconds')
+
+    def _write_images(self, spiffile, images):
+        """Write images, using typed auxiliary metadata when provided."""
+        aux_dtypes = getattr(self, 'AUX_DTYPES', None)
+        writer = getattr(spiffile, 'write_images_with_extra_aux_dtypes', None)
+        if aux_dtypes is None or writer is None:
+            spiffile.write_images(self.name, images)
+        else:
+            writer(
+                self.name,
+                images,
+                aux_dtypes,
+                getattr(self, 'AUX_ATTRS', None),
+            )
 
     def process_frames(self, frames):
         p = Images(self.aux_channels)

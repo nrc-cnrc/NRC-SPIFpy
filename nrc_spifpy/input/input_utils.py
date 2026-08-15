@@ -47,7 +47,7 @@ def read_sea_image_data(filename, file_dtype, typ, inst_name=None):
 
 def read_sea_tas(filename, typ, resolution):
 
-    if typ is '2dc':
+    if typ == '2dc':
         tas_tag = 6  # 2D Mono TAS Factors
 
     time, dset = read_sea_file(filename, tas_tag)
